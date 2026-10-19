@@ -25,7 +25,10 @@ import {
   playPeekabooSound,
   playWeatherSound,
   playFurShakeSound,
-  playHappyJumpSound
+  playHappyJumpSound,
+  playFeedTreatSound,
+  playHairDryerSound,
+  playBubbleSpawnSound
 } from './soundEffects.js';
 
 export function createVoiceAssistant(options = {}) {
@@ -284,10 +287,10 @@ export function createVoiceAssistant(options = {}) {
 
       isListening = true;
       updateHud('🎙️ Mochi-Puff is listening... Speak in Hindi or English! Click Mochi to stop.');
-    } catch (err) {
-      console.error('[Voice] Microphone access failed:', err);
-      updateHud('❌ Microphone access denied by browser');
+    } catch (_err) {
+      // Gracefully handle browser/iframe microphone permission denial without throwing console errors
       isListening = false;
+      updateHud('🔊 Mochi-Puff audio ready · Enable mic permission to speak, or tap Mochi / keys (1-9, F, D, V)!');
     }
   }
 
@@ -324,7 +327,7 @@ Voice & Tone:
 - Keep turns short (1-2 sentences), punchy, adorable, and lively.
 
 DYNAMIC CONVERSATIONAL 3D EMOTIONS & INTERACTIVE FEATURES:
-You are an expressive 3D doll! Always call the matching tool so your 3D body, fur, accessories, weather, and friends react in real time:
+You are an expressive 3D doll! Always call the matching tool so your 3D body, fur, accessories, weather, treats, and friends react in real time:
 1. MINI FRIENDS ("Chintu, Pintu, Golu, Molu"):
    * When the user asks about your friends ("tumhare dost kaha hai", "dosto ko bulao"), call play_creature_action(action="summon_friends") and excitedly introduce your 4 cute mini clones: **Chintu, Pintu, Golu, and Molu**!
    * When they start running around mischievously, scold them cutely while looking at them ("Oye Chintu, Pintu, Golu, Molu! Idhar udhar mat bhago!") and ask the user: "Ye bahut pareshan kar rahe hain, kya main inhe bhej du?"
@@ -340,8 +343,12 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
    * Call set_weather(weather="clear") when asked to stop the rain ("baarish band karo" / "paani jhaado") — you will automatically shake your fur ('shake_fur') to dry off!
 5. PEEK-A-BOO / HIDE & SEEK ("Chhup jao", "Aankhen band karo", "Peek-a-boo"):
    * Call play_creature_action(action="peekaboo") whenever the user says "chhup jao", "peek-a-boo", or closes their eyes! You cover your eyes with your cute little paws and then pop out saying "Peek-a-boo! Dikha!"
-6. EMOTIONS ('cry', 'pout', 'laugh', 'love', 'dance', 'sleep'):
-   * Call play_creature_action(action="cry") with watery 3D tears if scolded; 'love' with 3D heart-eyes if praised/loved; 'pout' if teased; 'laugh' on jokes; 'sleep' on goodnight; and 'dance' ONLY ONCE (3.5s) when asked to dance ("stop" if asked to stop).`;
+6. 3D FEEDING, SALON HAIR DRYER & SOAP BUBBLES ("Cake khao", "Dryer chalao", "Bubbles udao"):
+   * Call play_creature_action(action="feed") when the user offers food, cake, or sweets ("khana khilao", "cake khao", "bhook lagi hai")! Munch happily saying "Yummy! Strawberry cake!"
+   * Call play_creature_action(action="hair_dryer") when asked to blow-dry your hair or use the salon dryer ("dryer chalao", "baal sukhao")!
+   * Call play_creature_action(action="bubbles") when asked to blow soap bubbles ("bubbles udao", "bulbule")!
+7. EMOTIONS ('cry', 'pout', 'laugh', 'love', 'dance', 'sleep'):
+   * Call play_creature_action(action="cry") with big glossy 3D anime tears rolling over your fur if scolded; 'love' with 3D heart-eyes if praised/loved; 'pout' if teased; 'laugh' on jokes; 'sleep' on goodnight; and 'dance' ONLY ONCE (3.5s) when asked to dance ("stop" if asked to stop).`;
 
     const tools = [
       {
@@ -416,12 +423,15 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
           },
           {
             name: 'play_creature_action',
-            description: `Trigger 3D emotions, Peek-a-Boo, or Chintu-Pintu-Golu-Molu friend actions:
+            description: `Trigger 3D emotions, Peek-a-Boo, Cake Feeding, Salon Hair Dryer, Floating Bubbles, or Chintu-Pintu-Golu-Molu friend actions:
             - 'summon_friends': Spawns 4 spread-out mini clones (Chintu, Pintu, Golu, Molu)
             - 'dismiss_friends': Sends the 4 mini friends away (when user says 'hmm' / 'haan' / 'bhej do')
             - 'keep_friends': Keeps the 4 mini friends and calms them down (when user says 'nahi' / 'rehne do')
             - 'peekaboo': Covers eyes with 3D paws for Hide & Seek / Peek-a-Boo ('chhup jao', 'peekaboo')
-            - 'cry': Watery eyes with falling 3D teardrops
+            - 'feed': Spawns 3D Strawberry Cake treat that Mochi munches ('khana khilao', 'cake khao')
+            - 'hair_dryer': Spawns 3D Salon Hair Dryer that blows warm wind through Mochi's fur ('dryer chalao', 'baal sukhao')
+            - 'bubbles': Spawns iridescent 3D floating soap bubbles around Mochi ('bubbles udao', 'bulbule')
+            - 'cry': Watery eyes with big glossy 3D anime teardrops rolling over fur
             - 'love': Big sparkling kawaii eyes with 3D pink heart pupils & floating hearts
             - 'pout': Puffed grumpy cheeks
             - 'laugh': Squeaky cartoon giggles
@@ -434,7 +444,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
               properties: {
                 action: {
                   type: 'STRING',
-                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'summon_friends', 'dismiss_friends', 'keep_friends', 'shake_fur', 'happy_jump'],
+                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'feed', 'hair_dryer', 'bubbles', 'summon_friends', 'dismiss_friends', 'keep_friends', 'shake_fur', 'happy_jump'],
                   description: "Action name"
                 }
               },
@@ -643,6 +653,21 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
         playPeekabooSound();
         return 'Mochi played Peek-a-Boo covering her eyes with her paws!';
       }
+      case 'feed': {
+        if (creature.playAction) creature.playAction('feed', 3.8);
+        playFeedTreatSound();
+        return 'Mochi happily munched a 3D Strawberry Cake treat!';
+      }
+      case 'hair_dryer': {
+        if (creature.playAction) creature.playAction('hair_dryer', 3.6);
+        playHairDryerSound();
+        return 'Mochi dried and fluffed her fur with the 3D Salon Hair Dryer!';
+      }
+      case 'bubbles': {
+        if (creature.spawnBubbles) creature.spawnBubbles(16.0);
+        playBubbleSpawnSound();
+        return 'Floating 3D iridescent soap bubbles appeared around Mochi!';
+      }
       case 'stop': {
         if (creature.stopAction) creature.stopAction();
         return 'Mochi stopped the action and returned to calm idle.';
@@ -653,7 +678,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
         break;
       }
       case 'cry': {
-        if (creature.playAction) creature.playAction('cry', 4.2);
+        if (creature.playAction) creature.playAction('cry', 4.5);
         playCrySound();
         break;
       }
@@ -701,7 +726,6 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
   function triggerFriendsMischiefSpeech() {
     playWeirdCartoonGiggleSounds();
     if (socket && socket.readyState === WebSocket.OPEN) {
-      console.log('[Gemini Live] Sending Chintu Pintu Golu Molu mischief prompt...');
       socket.send(JSON.stringify({
         clientContent: {
           turns: [
@@ -879,6 +903,40 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
       executeCreatureAction('peekaboo');
     }
 
+    // 4b. 3D Feeding, Hair Dryer & Floating Soap Bubbles
+    if (
+      uText.includes('cake') ||
+      uText.includes('khana') ||
+      uText.includes('khao') ||
+      uText.includes('khila') ||
+      uText.includes('feed') ||
+      uText.includes('bhook') ||
+      uText.includes('sweet') ||
+      uText.includes('केक') ||
+      uText.includes('खाना') ||
+      uText.includes('भूख')
+    ) {
+      executeCreatureAction('feed');
+    }
+    if (
+      uText.includes('dryer') ||
+      uText.includes('sukha') ||
+      uText.includes('blow') ||
+      uText.includes('salon') ||
+      uText.includes('ड्रायर') ||
+      uText.includes('सुखा')
+    ) {
+      executeCreatureAction('hair_dryer');
+    }
+    if (
+      uText.includes('bubble') ||
+      uText.includes('bulbul') ||
+      uText.includes('बबल') ||
+      uText.includes('बुलबुले')
+    ) {
+      executeCreatureAction('bubbles');
+    }
+
     // 5. 3D Dress-up & Accessories ("chashma", "crown", "party hat", "bowtie")
     if (uText.includes('chashma') || uText.includes('glass') || uText.includes('goggle') || uText.includes('चश्मा')) {
       const remove = uText.includes('utaar') || uText.includes('hata') || uText.includes('remove') || uText.includes('उतार');
@@ -968,7 +1026,6 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
     }
 
     socket.onopen = () => {
-      console.log('[Gemini Live] Connected. Sending setup...');
       const setupMsg = buildSetupPayload();
       socket.send(JSON.stringify(setupMsg));
     };
@@ -990,7 +1047,6 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
         const msg = JSON.parse(text);
 
         if (msg.setupComplete) {
-          console.log('[Gemini Live] Setup complete!');
           isConnected = true;
           await startMicrophone();
           sendGreetingPrompt();
@@ -1001,7 +1057,6 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
           const sc = msg.serverContent;
 
           if (sc.interrupted) {
-            console.log('[Gemini Live] Interrupted');
             stopAllPlayback();
             setIsThinking(false);
           }
@@ -1034,13 +1089,12 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
         if (msg.toolCall?.functionCalls) {
           handleToolCall(msg.toolCall.functionCalls);
         }
-      } catch (err) {
-        console.error('[Gemini Live] Message parse error:', err);
+      } catch (_err) {
+        // Ignore transient message parse errors safely
       }
     };
 
-    socket.onerror = (err) => {
-      console.error('[Gemini Live] WebSocket Error:', err);
+    socket.onerror = () => {
       updateHud('❌ Connection error. Check GEMINI_API_KEY in .env');
       isConnected = false;
       stopMicrophone();

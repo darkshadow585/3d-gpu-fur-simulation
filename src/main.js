@@ -18,9 +18,12 @@ if (hudHint) {
 
 const urlSearchParams = new URLSearchParams(window.location.search);
 const forceWebGL = urlSearchParams.get('gpuFur') === '0' || urlSearchParams.get('mode') === 'webgl';
-const initialGpuFur = !forceWebGL;
+const isMobileDevice =
+  window.matchMedia('(max-width: 768px)').matches ||
+  ('ontouchstart' in window && window.innerWidth <= 920);
+const initialGpuFur = !forceWebGL && !isMobileDevice;
 
-// Initial state from our Sakura Mochi preset + Studio environment (WebGPU Fur mode by default, WebGL fallback / toggleable)
+// Initial state from our Sakura Mochi preset + Studio environment (WebGPU Fur mode on Desktop, Mobile 60 FPS tier on phones)
 const simState = {
   ...FUR_PRESETS[0],
   keyColor: '#fff7ed',
@@ -29,16 +32,18 @@ const simState = {
   rimIntensity: 1.35,
   windStrength: 0.95,
   environment: 'studio',
-  gpuFurEnabled: initialGpuFur
+  gpuFurEnabled: initialGpuFur,
+  isMobileTier: isMobileDevice
 };
 
 // 1. Initialize WebGL2 Renderer with alpha: true so the soft CSS radial studio or AR camera backdrop shines through
 const renderer = new THREE.WebGLRenderer({
-  antialias: true,
+  antialias: !isMobileDevice,
   powerPreference: 'high-performance',
   alpha: true
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const maxDeviceDPR = isMobileDevice ? 1.25 : 2.0;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDeviceDPR));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
@@ -67,7 +72,8 @@ controls.target.set(0, 0.05, 0);
 // 3. Synchronized 3-Point Studio Lighting Rig
 const keyLight = new THREE.DirectionalLight('#fff7ed', simState.lightIntensity * 1.4);
 keyLight.castShadow = true;
-keyLight.shadow.mapSize.set(1024, 1024);
+const shadowMapRes = isMobileDevice ? 512 : 1024;
+keyLight.shadow.mapSize.set(shadowMapRes, shadowMapRes);
 keyLight.shadow.bias = -0.0005;
 keyLight.shadow.radius = 2.5;
 keyLight.shadow.camera.left = -2.2;
@@ -94,6 +100,9 @@ if (creature.friendsContainer) {
 }
 if (creature.rainContainer) {
   scene.add(creature.rainContainer);
+}
+if (creature.bubblesContainer) {
+  scene.add(creature.bubblesContainer);
 }
 
 const gpuPhysics = createGPUFurPhysics(renderer);
@@ -487,14 +496,24 @@ window.addEventListener('pointerup', (e) => {
     if (isEventOnUIOverlay(e)) {
       return;
     }
-    // Verify raycast on exact click location directly against bodyMesh or mini friends
+    // Verify raycast on exact click location directly against bubbles, bodyMesh, or mini friends
     pointerNDC.x = (e.clientX / window.innerWidth) * 2.0 - 1.0;
     pointerNDC.y = -(e.clientY / window.innerHeight) * 2.0 + 1.0;
     raycaster.setFromCamera(pointerNDC, camera);
+
+    // 1. Check if user tapped/clicked a floating 3D soap bubble to POP it!
+    if (creature.bubblesContainer && creature.bubblesContainer.visible && creature.popBubbleMesh) {
+      const bubbleHits = raycaster.intersectObject(creature.bubblesContainer, true);
+      if (bubbleHits.length > 0 && creature.popBubbleMesh(bubbleHits[0].object)) {
+        boopShockwave = 0.65;
+        return;
+      }
+    }
+
     const hits = raycaster.intersectObject(creature.bodyMesh, false);
     const isDollClicked = hits.length > 0 || isPointerOverCreature;
 
-    // Also check if user clicked one of the 4 mini friends (Chintu, Pintu, Golu, Molu)!
+    // 2. Also check if user clicked one of the 4 mini friends (Chintu, Pintu, Golu, Molu)!
     let isFriendClicked = false;
     if (!isDollClicked && creature.friendsContainer && creature.friendsContainer.visible) {
       const friendHits = raycaster.intersectObject(creature.friendsContainer, true);
@@ -529,7 +548,7 @@ window.addEventListener('pointerup', (e) => {
   }
 });
 
-// 8. Background Keyboard Shortcuts for Actions (Keys 1-9, 0, C/G/H/B) without UI tags
+// 8. Background Keyboard Shortcuts for Actions (Keys 1-9, 0, F/D/V, C/G/H/B) without UI tags
 window.addEventListener('keydown', (e) => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   const key = e.key.toLowerCase();
@@ -542,6 +561,9 @@ window.addEventListener('keydown', (e) => {
     '6': 'love',
     '7': 'summon_friends',
     '8': 'peekaboo',
+    'f': 'feed',
+    'd': 'hair_dryer',
+    'v': 'bubbles',
     '0': 'stop'
   };
   if (keyMap[key] && voiceAssistant && voiceAssistant.playAction) {
@@ -563,23 +585,43 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Dynamic DPR & Framerate Guard variables (Zero GC) — Retina by default when compatible
-let targetDPR = Math.min(window.devicePixelRatio || 1, 2);
+// Dynamic DPR & Mobile 60 FPS Governor (Zero GC)
+let targetDPR = Math.min(window.devicePixelRatio || 1, maxDeviceDPR);
 let currentDPR = targetDPR;
 let isRecordMode = false;
-let autoFPSGuard = false;
+let autoFPSGuard = isMobileDevice; // Enabled automatically on mobile for locked 60 FPS
 let lowFpsFrames = 0;
 let highFpsFrames = 0;
 
-let wasMobileViewport = window.matchMedia('(max-width: 768px)').matches;
+let wasMobileViewport = isMobileDevice;
+
+// Touch-Drag Dynamic DPR Boost on Mobile: temporarily step down DPR during active touch-orbit
+if (isMobileDevice) {
+  controls.addEventListener('start', () => {
+    if (!isRecordMode && currentDPR > 1.0) {
+      renderer.setPixelRatio(Math.max(0.9, currentDPR * 0.82));
+    }
+  });
+  controls.addEventListener('end', () => {
+    if (!isRecordMode) {
+      renderer.setPixelRatio(currentDPR);
+    }
+  });
+}
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+
+  const isMobileNow = window.matchMedia('(max-width: 768px)').matches;
+  if (furSystem && furSystem.setMobileTier && isMobileNow !== wasMobileViewport) {
+    furSystem.setMobileTier(isMobileNow);
+  }
+  targetDPR = Math.min(window.devicePixelRatio || 1, isMobileNow ? 1.25 : 2.0);
+  currentDPR = isRecordMode ? 1.0 : targetDPR;
   renderer.setPixelRatio(currentDPR);
   renderer.setSize(window.innerWidth, window.innerHeight);
 
-  const isMobileNow = window.matchMedia('(max-width: 768px)').matches;
   if (isMobileNow || isMobileNow !== wasMobileViewport) {
     wasMobileViewport = isMobileNow;
     applyCameraFramingForEnvironment(simState.environment);
@@ -596,21 +638,24 @@ const webglForceTmp = new THREE.Vector3(0, 0, 0);
 function animate() {
   requestAnimationFrame(animate);
 
+  // Pause GPU work when browser tab is hidden to save mobile battery
+  if (document.hidden) {
+    clock.getDelta();
+    return;
+  }
+
   const dt = Math.min(clock.getDelta(), 0.033);
   elapsedTime += dt;
 
-  // Auto-FPS Guard: Automatically safeguards framerate during screen recording or heavy load
+  // Auto-FPS Guard: Automatically safeguards framerate on mobile or during screen recording
   if (autoFPSGuard && !isRecordMode) {
     if (dt > 0.024) { // frame dropped below ~41 FPS
       lowFpsFrames++;
       highFpsFrames = 0;
-      if (lowFpsFrames > 45 && currentDPR > 1.0) {
-        currentDPR = 1.0;
-        renderer.setPixelRatio(1.0);
+      if (lowFpsFrames > 40 && currentDPR > 0.95) {
+        currentDPR = 0.95;
+        renderer.setPixelRatio(currentDPR);
         lowFpsFrames = 0;
-        if (hudHint) {
-          hudHint.textContent = 'Auto-60 FPS Guard: Optimized resolution for screen recording / performance';
-        }
       }
     } else if (dt < 0.018) { // solid 55-60 FPS
       highFpsFrames++;
@@ -737,7 +782,9 @@ function animate() {
   }
 
   // Update active 3D / AR environment (Studio, Meadow, Cozy Highrise, AR View)
-  envManager.update(elapsedTime, simState.windStrength, creature.root);
+  const dryerBoost = creature.animState?.dryerActive ? 1.85 : 0.0;
+  const activeWind = simState.windStrength + dryerBoost;
+  envManager.update(elapsedTime, activeWind, creature.root);
 
   const wetness = creature.animState ? (creature.animState.wetness || 0.0) : 0.0;
 
@@ -747,7 +794,7 @@ function animate() {
     physicsTexture = gpuPhysics.step({
       time: elapsedTime,
       dt,
-      windStrength: simState.windStrength,
+      windStrength: activeWind,
       creatureVelocity: creature.animState.velocity,
       creatureAngularVel: creature.animState.angularVelocity,
       pointerLocalPos,
@@ -757,8 +804,9 @@ function animate() {
     });
   } else {
     // Lightweight WebGL analytical spring-damper inertia (Zero GPGPU RTT passes)
-    // Wetness makes the fur heavier so it droops downward further in Y
-    webglForceTmp.set(0, -0.32 - wetness * 0.65, 0);
+    // Wetness makes the fur heavier so it droops downward further in Y; Hair Dryer blows sideways waves
+    const dryerWaveX = dryerBoost > 0 ? -0.55 * Math.sin(elapsedTime * 26.0) - 0.35 : 0.0;
+    webglForceTmp.set(dryerWaveX, -0.32 - wetness * 0.65, 0);
     webglForceTmp.addScaledVector(creature.animState.velocity, -1.65);
     if (isPointerOverCreature) {
       webglForceTmp.addScaledVector(pointerVelocity, 0.85);
@@ -772,14 +820,19 @@ function animate() {
     }
   }
 
-  // Update shared fur uniforms (including wet heavy fur clumping & glossy sheen during 3D rain!)
+  // Update shared fur uniforms (including wet heavy fur clumping, glossy sheen, and Hair Dryer fluff!)
   const u = furSystem.sharedUniforms;
   u.uPhysicsTex.value = physicsTexture;
   u.uTime.value = elapsedTime;
+  u.uWindStrength.value = activeWind;
   u.uPointerLocalPos.value.copy(pointerLocalPos);
   u.uPointerActive.value = isPointerOverCreature ? 1.0 : 0.0;
   u.uWebGLInertia.value.copy(webglInertiaDisp);
   u.uBoopShockwave.value = boopShockwave;
+  if (u.uFurLength) {
+    const dryerFluff = dryerBoost > 0 ? 1.12 : 1.0;
+    u.uFurLength.value = (simState.furLength || 0.31) * dryerFluff;
+  }
   if (u.uSpecular) {
     u.uSpecular.value = (simState.specular || 0.72) * (1.0 + wetness * 0.45);
   }

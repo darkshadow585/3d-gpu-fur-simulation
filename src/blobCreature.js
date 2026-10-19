@@ -14,6 +14,10 @@ import {
   playWeatherSound,
   playFurShakeSound,
   playHappyJumpSound,
+  playFeedTreatSound,
+  playHairDryerSound,
+  playBubbleSpawnSound,
+  playBubblePopSound,
   getActiveVocalEnvelope
 } from './soundEffects.js';
 
@@ -342,36 +346,77 @@ export function createBlobCreature(options = {}) {
     sparkle1.visible = false;
     eyePivot.add(sparkle1);
 
-    // Glossy 3D Watery Tear Pool at lower eyelid + Falling Teardrops for 'cry' ("akho se aansu aaye")
+    // Glossy 3D Anime Watery Tear Pool + Cheek Tear Stream + Big Teardrops outside fur ("aansu iske sahi se banao")
     const tearMat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#7dd3fc'),
+      color: new THREE.Color('#bae6fd'),
       emissive: new THREE.Color('#38bdf8'),
-      emissiveIntensity: 0.35,
+      emissiveIntensity: 0.72,
       roughness: 0.02,
       metalness: 0.05,
-      transmission: 0.65,
+      transmission: 0.45,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.96,
       clearcoat: 1.0
     });
 
-    const tearPoolGeo = new THREE.SphereGeometry(0.052, 16, 12);
-    tearPoolGeo.scale(2.1, 0.55, 0.72);
+    // Big shimmering welling pool along lower eyelid (pushed forward to z=0.145 so fur never hides it)
+    const tearPoolGeo = new THREE.SphereGeometry(0.064, 18, 14);
+    tearPoolGeo.scale(2.45, 0.78, 0.96);
     const tearPool = new THREE.Mesh(tearPoolGeo, tearMat);
-    tearPool.position.set(0, -0.105, 0.105);
+    tearPool.position.set(0, -0.095, 0.145);
     tearPool.visible = false;
     eyePivot.add(tearPool);
 
+    // Glistening white highlight bead on the welling tear pool
+    const poolGlint = new THREE.Mesh(new THREE.SphereGeometry(0.022, 10, 8), highlightMat);
+    poolGlint.scale.set(1.6, 0.6, 0.5);
+    poolGlint.position.set(-side * 0.04, 0.015, 0.05);
+    tearPool.add(poolGlint);
+
+    // Continuous 3D anime cheek tear ribbon outside the fur shells (z = 1.13)
+    const streamGeo = new THREE.CylinderGeometry(0.026, 0.042, 0.44, 12);
+    streamGeo.scale(1.0, 1.0, 0.55);
+    const tearStream = new THREE.Mesh(streamGeo, tearMat);
+    tearStream.position.set(side * 0.34, -0.14, 1.13);
+    tearStream.rotation.z = side * 0.14;
+    tearStream.rotation.x = 0.16;
+    tearStream.visible = false;
+    faceGroup.add(tearStream);
+
+    // 3 Oversized 3D Anime Teardrops per eye with specular highlight dots rolling outside the fur!
     const tearDrops = [];
-    for (let t = 0; t < 2; t++) {
-      const dropGeo = new THREE.SphereGeometry(0.038, 14, 12);
-      dropGeo.scale(0.82, 1.45, 0.72);
+    for (let t = 0; t < 3; t++) {
+      const dropGroup = new THREE.Group();
+      const dropGeo = new THREE.SphereGeometry(0.058, 16, 14);
+      dropGeo.scale(0.88, 1.55, 0.85);
       const dropMesh = new THREE.Mesh(dropGeo, tearMat);
-      dropMesh.visible = false;
-      faceGroup.add(dropMesh);
+      dropGroup.add(dropMesh);
+
+      // Tiny white anime highlight on each falling teardrop
+      const dropGlint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 8), highlightMat);
+      dropGlint.position.set(-side * 0.016, 0.022, 0.046);
+      dropGroup.add(dropGlint);
+
+      // Ground splash ring when the teardrop hits the floor
+      const splashGeo = new THREE.RingGeometry(0.03, 0.068, 18);
+      const splashMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color('#7dd3fc'),
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide
+      });
+      const splashMesh = new THREE.Mesh(splashGeo, splashMat);
+      splashMesh.rotation.x = -Math.PI * 0.5;
+      splashMesh.visible = false;
+      faceGroup.add(splashMesh);
+
+      dropGroup.visible = false;
+      faceGroup.add(dropGroup);
       tearDrops.push({
-        mesh: dropMesh,
-        phase: t * 0.5 + (side > 0 ? 0.25 : 0.0),
+        mesh: dropGroup,
+        splashMesh,
+        splashMat,
+        phase: (t / 3) + (side > 0 ? 0.16 : 0.0),
         side
       });
     }
@@ -387,6 +432,7 @@ export function createBlobCreature(options = {}) {
       heartPupil,
       sparkle1,
       tearPool,
+      tearStream,
       tearDrops,
       side
     });
@@ -757,6 +803,182 @@ export function createBlobCreature(options = {}) {
   }
 
   // =========================================================================
+  // 5. 3D STRAWBERRY SHORTCAKE TREAT ("Khana khilao" / "Cake khao" / Key F)
+  // =========================================================================
+  const treatGroup = new THREE.Group();
+  treatGroup.name = 'StrawberryCakeTreat';
+  treatGroup.position.set(0, -0.12, 1.32);
+  treatGroup.visible = false;
+  root.add(treatGroup);
+
+  const cakeSpongeMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#fef3c7'),
+    roughness: 0.65
+  });
+  const cakeFrostingMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#fff1f2'),
+    roughness: 0.35
+  });
+  const pinkJamMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#fb7185'),
+    roughness: 0.3
+  });
+  const berryRedMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#e11d48'),
+    emissive: new THREE.Color('#9f1239'),
+    emissiveIntensity: 0.25,
+    roughness: 0.15,
+    clearcoat: 1.0
+  });
+  const leafGreenMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#22c55e'),
+    roughness: 0.4
+  });
+
+  // Cute pastel plate
+  const plateMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.28, 0.22, 0.03, 24),
+    new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.2 })
+  );
+  plateMesh.position.y = -0.12;
+  treatGroup.add(plateMesh);
+
+  const cakeBodyGroup = new THREE.Group();
+  treatGroup.add(cakeBodyGroup);
+
+  const spongeBase = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.16, 24), cakeSpongeMat);
+  spongeBase.position.y = -0.02;
+  cakeBodyGroup.add(spongeBase);
+
+  const jamLayer = new THREE.Mesh(new THREE.CylinderGeometry(0.215, 0.215, 0.035, 24), pinkJamMat);
+  jamLayer.position.y = -0.01;
+  cakeBodyGroup.add(jamLayer);
+
+  const frostingTop = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.215, 0.06, 24), cakeFrostingMat);
+  frostingTop.position.y = 0.06;
+  cakeBodyGroup.add(frostingTop);
+
+  // Whipped cream puffs around top rim
+  for (let c = 0; c < 6; c++) {
+    const ang = (c / 6) * Math.PI * 2;
+    const creamPuff = new THREE.Mesh(new THREE.SphereGeometry(0.042, 12, 10), cakeFrostingMat);
+    creamPuff.position.set(Math.cos(ang) * 0.14, 0.1, Math.sin(ang) * 0.14);
+    cakeBodyGroup.add(creamPuff);
+  }
+
+  // Glossy 3D Strawberry on top
+  const berryMesh = new THREE.Mesh(new THREE.ConeGeometry(0.068, 0.13, 16), berryRedMat);
+  berryMesh.position.y = 0.15;
+  cakeBodyGroup.add(berryMesh);
+
+  const berryLeaf = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.01, 0.02, 6), leafGreenMat);
+  berryLeaf.position.y = 0.095;
+  cakeBodyGroup.add(berryLeaf);
+
+  // =========================================================================
+  // 6. 3D SALON HAIR DRYER ("Hair dryer chalao" / "Baal sukhao" / Key D)
+  // =========================================================================
+  const dryerGroup = new THREE.Group();
+  dryerGroup.name = 'SalonHairDryer';
+  dryerGroup.position.set(1.15, 0.35, 0.75);
+  dryerGroup.visible = false;
+  root.add(dryerGroup);
+
+  const dryerPinkMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#f472b6'),
+    roughness: 0.2,
+    metalness: 0.25,
+    clearcoat: 0.8
+  });
+  const dryerNozzleMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#38bdf8'),
+    roughness: 0.25,
+    metalness: 0.5
+  });
+
+  // Dryer barrel pointing toward Mochi
+  const dryerBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.34, 20), dryerPinkMat);
+  dryerBarrel.rotation.z = Math.PI * 0.5;
+  dryerGroup.add(dryerBarrel);
+
+  // Dryer concentrator nozzle facing Mochi (-X)
+  const dryerNozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.11, 0.12, 18), dryerNozzleMat);
+  dryerNozzle.rotation.z = Math.PI * 0.5;
+  dryerNozzle.position.x = -0.21;
+  dryerGroup.add(dryerNozzle);
+
+  // Dryer handle
+  const dryerHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.042, 0.28, 14), dryerPinkMat);
+  dryerHandle.position.set(0.06, -0.2, 0);
+  dryerHandle.rotation.z = 0.22;
+  dryerGroup.add(dryerHandle);
+
+  // 3 Animated Air-Wave Rings shooting out of the nozzle toward Mochi's fur!
+  const dryerAirRings = [];
+  const airRingGeo = new THREE.RingGeometry(0.06, 0.095, 20);
+  for (let w = 0; w < 3; w++) {
+    const airMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#7dd3fc'),
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide
+    });
+    const rMesh = new THREE.Mesh(airRingGeo, airMat);
+    rMesh.rotation.y = Math.PI * 0.5;
+    dryerGroup.add(rMesh);
+    dryerAirRings.push({ mesh: rMesh, mat: airMat, phase: w / 3 });
+  }
+
+  // =========================================================================
+  // 7. 3D FLOATING IRIDESCENT SOAP BUBBLES ("Bubbles udao" / Key V / Tap to Pop!)
+  // =========================================================================
+  const bubblesContainer = new THREE.Group();
+  bubblesContainer.name = 'FloatingSoapBubbles';
+  bubblesContainer.visible = false;
+
+  const BUBBLE_COUNT = 14;
+  const bubbleGeo = new THREE.SphereGeometry(0.145, 20, 16);
+  const bubbleGlintGeo = new THREE.SphereGeometry(0.032, 10, 8);
+  const bubbleColors = ['#38bdf8', '#f472b6', '#a78bfa', '#4ade80', '#fde047'];
+  const bubbleItems = [];
+
+  for (let b = 0; b < BUBBLE_COUNT; b++) {
+    const bCol = bubbleColors[b % bubbleColors.length];
+    const bMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color('#e0f2fe'),
+      emissive: new THREE.Color(bCol),
+      emissiveIntensity: 0.45,
+      roughness: 0.03,
+      metalness: 0.1,
+      transmission: 0.72,
+      transparent: true,
+      opacity: 0.68,
+      clearcoat: 1.0
+    });
+    const bMesh = new THREE.Mesh(bubbleGeo, bMat);
+    bMesh.userData.bubbleIndex = b;
+
+    const bGlint = new THREE.Mesh(bubbleGlintGeo, highlightMat);
+    bGlint.position.set(-0.05, 0.06, 0.12);
+    bMesh.add(bGlint);
+
+    const angle = (b / BUBBLE_COUNT) * Math.PI * 2;
+    const radius = 1.05 + (b % 3) * 0.48;
+    bMesh.position.set(Math.cos(angle) * radius, (b % 5) * 0.45 - 0.6, Math.sin(angle) * radius * 0.7 + 0.35);
+    bubblesContainer.add(bMesh);
+
+    bubbleItems.push({
+      mesh: bMesh,
+      angle,
+      radius,
+      yOffset: (b / BUBBLE_COUNT) * 2.6 - 0.8,
+      speed: 0.55 + (b % 4) * 0.18,
+      scale: 0.65 + (b % 3) * 0.25,
+      poppedTimer: 0.0
+    });
+  }
+
+  // =========================================================================
   // 1. MINI FRIEND CLONES ("Chintu, Pintu, Golu, Molu" — well separated + mischief!)
   // =========================================================================
   const friendsContainer = new THREE.Group();
@@ -947,11 +1169,15 @@ export function createBlobCreature(options = {}) {
       bowtie: false,
       sunglasses: false
     },
+    weatherMode: 'clear',
     isRaining: false,
     hasUmbrella: false,
     umbrellaScale: 0.0,
     wetness: 0.0,
     rainTimer: 0.0,
+    bubblesActive: false,
+    bubblesTimer: 0.0,
+    dryerActive: false,
     prevPosition: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
     angularVelocity: new THREE.Vector3(),
@@ -1154,7 +1380,7 @@ export function createBlobCreature(options = {}) {
     } else if (key.includes('crown') || key.includes('taj')) {
       const next = state !== undefined ? Boolean(state) : !animState.accessories.crown;
       animState.accessories.crown = next;
-      if (next) animState.accessories.party_hat = false; // mutually exclusive hats
+      if (next) animState.accessories.party_hat = false;
     } else if (key.includes('hat') || key.includes('topi') || key.includes('party')) {
       const next = state !== undefined ? Boolean(state) : !animState.accessories.party_hat;
       animState.accessories.party_hat = next;
@@ -1208,7 +1434,6 @@ export function createBlobCreature(options = {}) {
       animState.rainTimer = 0.0;
       rainContainer.visible = false;
       if (wasWet) {
-        // Shake off the water drops automatically!
         playAction('shake_fur', 2.2);
         if (typeof onWetShakeCallback === 'function') {
           onWetShakeCallback();
@@ -1219,9 +1444,43 @@ export function createBlobCreature(options = {}) {
     }
   }
 
+  function spawnBubbles(duration = 16.0) {
+    animState.bubblesActive = true;
+    animState.bubblesTimer = duration;
+    bubblesContainer.visible = true;
+    for (const b of bubbleItems) {
+      b.poppedTimer = 0.0;
+      b.mesh.visible = true;
+    }
+    animState.boopImpulse = 0.65;
+    if (canPlaySfx(80)) {
+      playBubbleSpawnSound();
+    }
+  }
+
+  function popBubbleMesh(hitObject) {
+    if (!hitObject) return false;
+    let target = hitObject;
+    while (target && target.userData?.bubbleIndex === undefined && target.parent) {
+      target = target.parent;
+    }
+    const idx = target?.userData?.bubbleIndex;
+    if (idx !== undefined && bubbleItems[idx] && bubbleItems[idx].poppedTimer <= 0) {
+      bubbleItems[idx].poppedTimer = 1.6;
+      bubbleItems[idx].mesh.visible = false;
+      playBubblePopSound(0.95 + (idx % 4) * 0.14);
+      animState.boopImpulse = Math.max(animState.boopImpulse, 0.55);
+      return true;
+    }
+    return false;
+  }
+
   function stopAction() {
     animState.activeAction = null;
     animState.actionTimer = 0.0;
+    animState.dryerActive = false;
+    treatGroup.visible = false;
+    dryerGroup.visible = false;
     animState.boopImpulse = 0.25;
     if (canPlaySfx(80)) {
       playMochiBoopSound(0.95);
@@ -1247,8 +1506,12 @@ export function createBlobCreature(options = {}) {
       calmFriendsAndKeep();
       return;
     }
+    if (action === 'bubbles') {
+      spawnBubbles(16.0);
+      return;
+    }
 
-    const safeDuration = Number.isFinite(duration) && duration > 0 ? Math.min(duration, 6.0) : 3.5;
+    const safeDuration = Number.isFinite(duration) && duration > 0 ? Math.min(duration, 6.0) : 3.8;
     animState.activeAction = action;
     animState.actionTimer = safeDuration;
 
@@ -1300,6 +1563,23 @@ export function createBlobCreature(options = {}) {
       case 'happy_jump':
         animState.boopImpulse = 0.9;
         if (canPlaySfx(80)) playHappyJumpSound();
+        break;
+      case 'feed':
+        animState.actionTimer = 3.8;
+        animState.boopImpulse = 0.55;
+        animState.isPouting = false;
+        animState.targetCheekPuff = 0.0;
+        treatGroup.visible = true;
+        if (canPlaySfx(80)) playFeedTreatSound();
+        break;
+      case 'hair_dryer':
+        animState.actionTimer = 3.6;
+        animState.dryerActive = true;
+        animState.wetness = 0.0;
+        animState.isRaining = false;
+        rainContainer.visible = false;
+        dryerGroup.visible = true;
+        if (canPlaySfx(80)) playHairDryerSound();
         break;
     }
   }
@@ -1388,9 +1668,11 @@ export function createBlobCreature(options = {}) {
       if (animState.actionTimer <= 0) {
         animState.actionTimer = 0.0;
         animState.activeAction = null;
+        animState.dryerActive = false;
       }
     } else if (animState.activeAction !== null) {
       animState.activeAction = null;
+      animState.dryerActive = false;
     }
 
     const act = animState.activeAction;
@@ -1413,8 +1695,8 @@ export function createBlobCreature(options = {}) {
       actSquash = Math.sin(dTime) * 0.11 * fade;
     } else if (act === 'cry') {
       actHop = -0.06 * s;
-      actSway = Math.sin(animState.time * 36.0) * 0.015 * s;
-      actDroopX = 0.12 + Math.sin(animState.time * 8.0) * 0.03;
+      actSway = Math.sin(animState.time * 36.0) * 0.018 * s;
+      actDroopX = 0.10 + Math.sin(animState.time * 8.0) * 0.03;
       actSquash = -0.07 + Math.sin(animState.time * 8.0) * 0.025;
     } else if (act === 'sleep') {
       actHop = -0.04 * s + Math.sin(animState.time * 1.5) * 0.02 * s;
@@ -1425,7 +1707,6 @@ export function createBlobCreature(options = {}) {
       actLeanZ = 0.09 * s;
       actTilt = Math.sin(animState.time * 4.5) * 0.11;
     } else if (act === 'peekaboo') {
-      // Cute shy crouch while hiding eyes, then pop up on "Peek-a-boo!"
       const isPopPhase = animState.actionTimer < 0.85;
       actHop = isPopPhase ? 0.12 * s : -0.05 * s;
       actSquash = isPopPhase ? 0.08 : -0.06;
@@ -1433,6 +1714,96 @@ export function createBlobCreature(options = {}) {
     } else if (act === 'shake_fur') {
       actYawOffset = Math.sin(animState.time * 38.0) * 0.36;
       actTilt = Math.cos(animState.time * 32.0) * 0.14;
+    } else if (act === 'feed') {
+      // Mochi leans forward in 3 excited bites and chews happily!
+      const elapsedFeed = 3.8 - animState.actionTimer;
+      const biteWave = Math.max(0.0, Math.sin(elapsedFeed * 6.8));
+      actDroopX = 0.12 * biteWave;
+      actLeanZ = 0.11 * biteWave * s;
+      actHop = Math.abs(Math.sin(elapsedFeed * 9.0)) * 0.055 * s;
+      actSquash = Math.sin(elapsedFeed * 14.0) * 0.045;
+    } else if (act === 'hair_dryer') {
+      // Mochi sways happily in the warm hair dryer breeze as her fur puffs up!
+      actSway = Math.sin(animState.time * 9.0) * 0.06 * s;
+      actYawOffset = Math.sin(animState.time * 7.5) * 0.14;
+      actSquash = 0.05 + Math.sin(animState.time * 12.0) * 0.03;
+    }
+
+    // Update 3D Strawberry Cake Treat during 'feed'
+    if (act === 'feed') {
+      treatGroup.visible = true;
+      const elapsedFeed = 3.8 - animState.actionTimer;
+      const remainFrac = Math.max(0.0, 1.0 - elapsedFeed / 3.1);
+      cakeBodyGroup.scale.setScalar(Math.max(0.001, remainFrac));
+      treatGroup.position.set(0, -0.10 + Math.sin(animState.time * 6.0) * 0.025, 1.32);
+      treatGroup.rotation.y = Math.sin(animState.time * 3.0) * 0.2;
+    } else {
+      treatGroup.visible = false;
+    }
+
+    // Update 3D Salon Hair Dryer & Air Wave Rings during 'hair_dryer'
+    if (act === 'hair_dryer') {
+      dryerGroup.visible = true;
+      animState.dryerActive = true;
+      dryerGroup.position.set(
+        1.12 + Math.sin(animState.time * 4.5) * 0.08,
+        0.25 + Math.sin(animState.time * 3.2) * 0.22,
+        0.78 + Math.cos(animState.time * 2.8) * 0.15
+      );
+      dryerGroup.rotation.z = Math.sin(animState.time * 5.0) * 0.12;
+      for (const ring of dryerAirRings) {
+        const wProg = (animState.time * 3.2 + ring.phase) % 1.0;
+        ring.mesh.position.set(-0.26 - wProg * 0.78, 0, 0);
+        ring.mesh.scale.setScalar(1.0 + wProg * 2.2);
+        ring.mat.opacity = (1.0 - wProg) * 0.65;
+      }
+    } else {
+      dryerGroup.visible = false;
+      animState.dryerActive = false;
+    }
+
+    // Update 3D Floating Iridescent Soap Bubbles
+    if (animState.bubblesActive) {
+      if (animState.bubblesTimer > 0) {
+        animState.bubblesTimer -= safeDt;
+        if (animState.bubblesTimer <= 0) {
+          animState.bubblesActive = false;
+          bubblesContainer.visible = false;
+        }
+      }
+      bubblesContainer.visible = animState.bubblesActive;
+      bubblesContainer.position.copy(anchorPos);
+      for (let i = 0; i < bubbleItems.length; i++) {
+        const b = bubbleItems[i];
+        if (b.poppedTimer > 0) {
+          b.poppedTimer -= safeDt;
+          if (b.poppedTimer <= 0) {
+            b.mesh.visible = true;
+            b.yOffset = -0.8;
+          }
+          continue;
+        }
+        b.yOffset += b.speed * safeDt;
+        if (b.yOffset > 1.8) {
+          b.yOffset = -0.85;
+        }
+        const bAngle = b.angle + animState.time * 0.45;
+        const bx = Math.cos(bAngle) * b.radius * s + Math.sin(animState.time * 2.2 + i) * 0.12 * s;
+        const by = b.yOffset * s;
+        const bz = Math.sin(bAngle) * b.radius * 0.75 * s + 0.35 * s;
+        b.mesh.position.set(bx, by, bz);
+        const wobble = b.scale * s * (1.0 + Math.sin(animState.time * 5.5 + i) * 0.08);
+        b.mesh.scale.setScalar(wobble);
+
+        // Auto-pop if Mochi jumps high right into a bubble!
+        if (animState.boopImpulse > 0.5 && Math.hypot(bx, by - 0.3 * s, bz) < 0.72 * s) {
+          b.poppedTimer = 1.8;
+          b.mesh.visible = false;
+          playBubblePopSound(1.0 + (i % 3) * 0.15);
+        }
+      }
+    } else {
+      bubblesContainer.visible = false;
     }
 
     // When Chintu, Pintu, Golu, Molu are running wild, Mochi turns its head left & right watching them!
@@ -1470,7 +1841,6 @@ export function createBlobCreature(options = {}) {
         Math.abs(Math.sin(animState.boopPhase)) * animState.boopImpulse * 0.32) *
         s + talkBounce + (Math.abs(Math.sin(animState.time * 15.0)) * 0.025 * tickle) * s + actHop;
 
-    // Wetness makes Mochi slightly droopy until Umbrella opens or fur shakes!
     const wetDroop = animState.wetness * 0.06;
     const squash =
       1.0 +
@@ -1494,9 +1864,9 @@ export function createBlobCreature(options = {}) {
       anchorPos.z + actLeanZ
     );
 
-    const bodyPuffX = 1.0 + puff * 0.18;
-    const bodyPuffZ = 1.0 + puff * 0.15;
-    const bodyPuffY = 1.0 - puff * 0.03;
+    const bodyPuffX = 1.0 + puff * 0.18 + (act === 'hair_dryer' ? 0.06 : 0.0);
+    const bodyPuffZ = 1.0 + puff * 0.15 + (act === 'hair_dryer' ? 0.06 : 0.0);
+    const bodyPuffY = 1.0 - puff * 0.03 + (act === 'hair_dryer' ? 0.05 : 0.0);
     root.scale.set(
       (1.0 / Math.sqrt(squash)) * s * bodyPuffX,
       squash * s * bodyPuffY,
@@ -1527,7 +1897,6 @@ export function createBlobCreature(options = {}) {
       if (pw.progress > 0.01) {
         pw.group.visible = true;
         const p = pw.progress;
-        // Interpolate from side arms (0.85, -0.18, 0.55) to right over the eyes (0.29, 0.17, 1.08)
         pw.group.position.set(
           pw.side * (0.85 * (1.0 - p) + 0.28 * p),
           -0.18 * (1.0 - p) + 0.17 * p,
@@ -1559,7 +1928,6 @@ export function createBlobCreature(options = {}) {
       rainContainer.position.copy(anchorPos);
       for (const rd of rainDrops) {
         let ry = rd.mesh.position.y - rd.speed * safeDt * s;
-        // If umbrella is open, block raindrops hitting the umbrella canopy!
         if (animState.hasUmbrella && Math.hypot(rd.baseX, rd.baseZ) < 0.95 && ry < 1.15 * s && ry > 0.4 * s) {
           ry = -1.1 * s;
         }
@@ -1605,9 +1973,9 @@ export function createBlobCreature(options = {}) {
     if (act === 'sleep' || isHidingEyes) {
       blinkScaleY = 0.04;
     } else if (act === 'cry') {
-      blinkScaleY = 0.78 + Math.sin(animState.time * 24.0) * 0.06;
-      eyeScaleX = 1.05;
-    } else if (act === 'love') {
+      blinkScaleY = 0.82 + Math.sin(animState.time * 24.0) * 0.06;
+      eyeScaleX = 1.06;
+    } else if (act === 'love' || (act === 'feed' && animState.actionTimer < 1.2)) {
       const heartPulse = 1.0 + Math.sin(animState.time * 10.0) * 0.06;
       blinkScaleY = 1.24 * heartPulse;
       eyeScaleX = 1.20 * heartPulse;
@@ -1641,7 +2009,7 @@ export function createBlobCreature(options = {}) {
     }
 
     for (const b of blushMeshes) {
-      const loveBoost = act === 'love' ? 0.35 : 0.0;
+      const loveBoost = (act === 'love' || act === 'feed') ? 0.35 : 0.0;
       const puffScaleX = 1.4 * (1.0 + puff * 1.25 + tickle * 0.25 + loveBoost);
       const puffScaleY = 0.75 * (1.0 + puff * 1.35 + tickle * 0.2 + loveBoost);
       const puffScaleZ = 0.35 * (1.0 + puff * 1.75 + tickle * 0.35 + loveBoost);
@@ -1653,7 +2021,7 @@ export function createBlobCreature(options = {}) {
       );
     }
 
-    if (act === 'love') {
+    if (act === 'love' || act === 'feed') {
       blushMat.color.set('#ff1e74');
       blushMat.opacity = 0.96;
       irisMaterial.color.set('#6b21a8');
@@ -1671,6 +2039,11 @@ export function createBlobCreature(options = {}) {
       if (act === 'cry') {
         mouthGroup.scale.set(0.85, -0.68 + Math.sin(animState.time * 18.0) * 0.12, 1.0);
         mouthGroup.position.set(0, 0.015, 1.045);
+      } else if (act === 'feed') {
+        // Happy chewing mouth motion!
+        const chew = Math.abs(Math.sin(animState.time * 16.0));
+        mouthGroup.scale.set(1.25 + chew * 0.35, 0.65 + chew * 0.95, 1.0);
+        mouthGroup.position.set(0, 0.032 - chew * 0.015, 1.055);
       } else if (act === 'love') {
         mouthGroup.scale.set(1.32, 0.85 + Math.sin(animState.time * 9.0) * 0.12, 1.0);
         mouthGroup.position.set(0, 0.038, 1.055);
@@ -1692,18 +2065,18 @@ export function createBlobCreature(options = {}) {
     }
 
     const isCrying = act === 'cry';
-    const isLoving = act === 'love';
+    const isLoving = act === 'love' || (act === 'feed' && animState.actionTimer < 1.3);
 
     for (const eye of eyes) {
       eye.pivot.scale.set(eyeScaleX, blinkScaleY, 1.0);
 
-      const cryShimmerX = isCrying ? Math.sin(animState.time * 32.0 + eye.side) * 0.012 : 0.0;
-      const cryShimmerY = isCrying ? Math.cos(animState.time * 28.0) * 0.012 : 0.0;
+      const cryShimmerX = isCrying ? Math.sin(animState.time * 32.0 + eye.side) * 0.014 : 0.0;
+      const cryShimmerY = isCrying ? Math.cos(animState.time * 28.0) * 0.014 : 0.0;
       const eyeLookOffsetX = puff > 0.08 ? -eye.side * 0.02 : -eye.side * 0.042 + animState.currentLook.x * 0.028;
 
       eye.catchlightMain.position.x = eyeLookOffsetX + cryShimmerX;
       eye.catchlightMain.position.y = 0.052 + animState.currentLook.y * 0.025 + cryShimmerY;
-      const catchScale = isLoving ? 1.35 : (isCrying ? 1.25 : 1.0);
+      const catchScale = isLoving ? 1.35 : (isCrying ? 1.32 : 1.0);
       eye.catchlightMain.scale.set(catchScale, 1.18 * catchScale, 0.32);
 
       eye.heartPupil.visible = isLoving;
@@ -1713,27 +2086,57 @@ export function createBlobCreature(options = {}) {
         eye.heartPupil.scale.set(beat, beat, 1.0);
       }
 
+      // Expressive 3D Anime Tear Pool & Cheek Tear Stream outside the fur shells!
       eye.tearPool.visible = isCrying;
+      if (eye.tearStream) {
+        eye.tearStream.visible = isCrying;
+      }
       if (isCrying) {
-        const poolPulse = 1.0 + Math.sin(animState.time * 14.0 + eye.side) * 0.18;
-        eye.tearPool.scale.set(2.1 * poolPulse, 0.65 * poolPulse, 0.75);
+        const poolPulse = 1.0 + Math.sin(animState.time * 15.0 + eye.side) * 0.22;
+        eye.tearPool.scale.set(2.45 * poolPulse, 0.82 * poolPulse, 0.96);
+        if (eye.tearStream) {
+          const streamWobble = 1.0 + Math.sin(animState.time * 18.0 + eye.side) * 0.16;
+          eye.tearStream.scale.set(streamWobble, 1.0, 0.65);
+          eye.tearStream.position.set(
+            eye.side * (0.34 + Math.sin(animState.time * 12.0) * 0.015),
+            -0.14,
+            1.14
+          );
+        }
       }
 
+      // 3 Oversized Glossy Teardrops per eye rolling clearly outside the 64 fur shells + Ground Splash Rings
       for (const td of eye.tearDrops) {
         td.mesh.visible = isCrying;
         if (isCrying) {
-          const tCycle = (animState.time * 1.45 + td.phase) % 1.0;
-          const startX = td.side * 0.33;
-          const startY = 0.06;
-          const startZ = 0.99;
+          const tCycle = (animState.time * 1.35 + td.phase) % 1.0;
+          const startX = td.side * 0.34;
+          const startY = 0.05;
+          // Positioned at z = 1.15 so teardrops roll OUTSIDE the fur shell radius!
+          const startZ = 1.15;
 
-          const fallY = startY - tCycle * 0.56;
-          const curveX = startX + td.side * Math.sin(tCycle * Math.PI) * 0.08;
-          const curveZ = startZ + Math.sin(tCycle * Math.PI * 0.7) * 0.04 - tCycle * 0.08;
+          const fallY = startY - tCycle * 0.86;
+          const curveX = startX + td.side * Math.sin(tCycle * Math.PI * 0.85) * 0.14;
+          const curveZ = startZ + Math.sin(tCycle * Math.PI * 0.65) * 0.06 - tCycle * 0.09;
 
           td.mesh.position.set(curveX, fallY, curveZ);
-          const dropScale = Math.sin(tCycle * Math.PI) * 1.15;
-          td.mesh.scale.set(0.82 * dropScale, 1.45 * dropScale, 0.72 * dropScale);
+          const dropScale = Math.sin(tCycle * Math.PI) * 1.35;
+          td.mesh.scale.set(0.92 * dropScale, 1.55 * dropScale, 0.92 * dropScale);
+
+          // Ground splash ring when teardrop lands at bottom of cheek/ground
+          if (td.splashMesh) {
+            if (tCycle > 0.72) {
+              td.splashMesh.visible = true;
+              const sProg = (tCycle - 0.72) / 0.28;
+              td.splashMesh.position.set(curveX, -0.88, curveZ);
+              td.splashMesh.scale.setScalar(0.5 + sProg * 2.2);
+              td.splashMat.opacity = (1.0 - sProg) * 0.85;
+            } else {
+              td.splashMesh.visible = false;
+            }
+          }
+        } else if (td.splashMesh) {
+          td.splashMesh.visible = false;
         }
       }
     }
@@ -1762,7 +2165,6 @@ export function createBlobCreature(options = {}) {
     if (animState.friendsVisible) {
       animState.friendsActiveTime += safeDt;
 
-      // After 4.5 seconds, Chintu Pintu Golu Molu start running around mischievously!
       if (animState.friendsActiveTime >= 4.5 && !animState.friendsMischiefTriggered) {
         animState.friendsMischiefTriggered = true;
         animState.friendsRunningWild = true;
@@ -1795,7 +2197,6 @@ export function createBlobCreature(options = {}) {
         const friendScale = cfg.scale * s * p;
         const fTime = animState.time * 5.2 + cfg.phaseOffset;
 
-        // Playful running around ("idhar udhar bhage") when runningWild is active!
         const isRunning = animState.friendsRunningWild;
         const targetRunX = isRunning ? Math.sin(animState.time * (2.6 + i * 0.45) + cfg.phaseOffset) * 0.62 : 0.0;
         const targetRunZ = isRunning ? Math.cos(animState.time * (2.2 + i * 0.35) + cfg.phaseOffset) * 0.42 : 0.0;
@@ -1848,6 +2249,7 @@ export function createBlobCreature(options = {}) {
     root,
     friendsContainer,
     rainContainer,
+    bubblesContainer,
     bodyMesh,
     bodyGeometry,
     skinMaterial,
@@ -1864,6 +2266,8 @@ export function createBlobCreature(options = {}) {
     calmFriendsAndKeep,
     toggleAccessory,
     setWeatherState,
+    spawnBubbles,
+    popBubbleMesh,
     stopAction,
     playAction,
     isPouting: () => animState.isPouting,

@@ -9,7 +9,9 @@ import { evaluateFollicleMask, evaluateGroomFlow } from './blobCreature.js';
 
 export const SHELL_COUNT = 64;
 export const WEBGL_SHELL_COUNT = 32;
+export const MOBILE_SHELL_COUNT = 22;
 export const WEBGL_STRAND_COUNT = 26000;
+export const MOBILE_STRAND_COUNT = 16000;
 export const MAX_STRAND_COUNT = 60000;
 
 /**
@@ -44,9 +46,20 @@ function createHairBladeTemplateGeometry(segments = 20) {
  * Creates the Hybrid Dual-Pipeline GPU Fur System attached to the blob creature:
  * - Default WebGPU / GPU Fur Mode: 64-Layer Volumetric GPU Shell Mesh + 60,000 GPU-Instanced 3D Tapered Hair Strands + GPGPU Verlet
  * - Fallback / Toggleable WebGL Mode: Lightweight analytical WebGL fur (32 shells + 26k plush strands, zero GPGPU RTT)
+ * - Mobile 60 FPS Tier: Adaptive 22 shells + 16k strands so mobile GPUs maintain locked 60 FPS
  */
 export function createGPUFurSystem(baseGeometry, initialParams) {
   let gpuFurEnabled = initialParams.gpuFurEnabled !== undefined ? Boolean(initialParams.gpuFurEnabled) : true;
+  let isMobileTier = Boolean(initialParams.isMobileTier);
+
+  const getTargetShellCount = () => {
+    if (isMobileTier) return MOBILE_SHELL_COUNT;
+    return gpuFurEnabled ? SHELL_COUNT : WEBGL_SHELL_COUNT;
+  };
+  const getTargetStrandCap = () => {
+    if (isMobileTier) return MOBILE_STRAND_COUNT;
+    return gpuFurEnabled ? MAX_STRAND_COUNT : WEBGL_STRAND_COUNT;
+  };
 
   const sharedUniforms = {
     uPhysicsTex: { value: null },
@@ -73,13 +86,13 @@ export function createGPUFurSystem(baseGeometry, initialParams) {
     uPointerLocalPos: { value: new THREE.Vector3(0, 0, 2) },
     uPointerActive: { value: 0.0 },
     uGpuFurMode: { value: gpuFurEnabled ? 1.0 : 0.0 },
-    uShellCountScale: { value: gpuFurEnabled ? 1.0 : SHELL_COUNT / WEBGL_SHELL_COUNT },
+    uShellCountScale: { value: SHELL_COUNT / getTargetShellCount() },
     uWebGLInertia: { value: new THREE.Vector3(0, 0, 0) },
     uBoopShockwave: { value: 0.0 }
   };
 
   // ---------------------------------------------------------------------------
-  // 1. Volumetric Shell Geometry (32 shells in default WebGL mode, 64 in GPU Fur mode)
+  // 1. Volumetric Shell Geometry (22 shells on mobile, 32 in WebGL, 64 in GPU Fur)
   // ---------------------------------------------------------------------------
   const shellGeometry = new THREE.InstancedBufferGeometry();
   shellGeometry.index = baseGeometry.index;
@@ -97,7 +110,7 @@ export function createGPUFurSystem(baseGeometry, initialParams) {
     'aShellIndex',
     new THREE.InstancedBufferAttribute(shellIndices, 1)
   );
-  shellGeometry.instanceCount = gpuFurEnabled ? SHELL_COUNT : WEBGL_SHELL_COUNT;
+  shellGeometry.instanceCount = getTargetShellCount();
 
   const shellMaterial = new THREE.ShaderMaterial({
     vertexShader: SHELL_VERTEX_SHADER,
@@ -301,7 +314,7 @@ export function createGPUFurSystem(baseGeometry, initialParams) {
     'aMaskValue',
     new THREE.InstancedBufferAttribute(maskValueArray, 1)
   );
-  const activeMaxStrands = gpuFurEnabled ? MAX_STRAND_COUNT : WEBGL_STRAND_COUNT;
+  const activeMaxStrands = getTargetStrandCap();
   strandGeometry.instanceCount = Math.floor(activeMaxStrands * initialParams.furDensity);
 
   const strandMaterial = new THREE.ShaderMaterial({
@@ -318,20 +331,29 @@ export function createGPUFurSystem(baseGeometry, initialParams) {
   strandMesh.frustumCulled = false;
   strandMesh.renderOrder = 2;
 
+  function syncInstanceCounts() {
+    const targetShells = getTargetShellCount();
+    sharedUniforms.uShellCountScale.value = SHELL_COUNT / targetShells;
+    shellGeometry.instanceCount = targetShells;
+    const cap = getTargetStrandCap();
+    strandGeometry.instanceCount = Math.floor(cap * sharedUniforms.uFurDensity.value);
+  }
+
   function updateDensity(density) {
     const clamped = Math.max(0.1, Math.min(1.0, density));
     sharedUniforms.uFurDensity.value = clamped;
-    const cap = gpuFurEnabled ? MAX_STRAND_COUNT : WEBGL_STRAND_COUNT;
-    strandGeometry.instanceCount = Math.floor(cap * clamped);
+    syncInstanceCounts();
   }
 
   function setGPUFurEnabled(enabled) {
     gpuFurEnabled = Boolean(enabled);
     sharedUniforms.uGpuFurMode.value = gpuFurEnabled ? 1.0 : 0.0;
-    sharedUniforms.uShellCountScale.value = gpuFurEnabled ? 1.0 : SHELL_COUNT / WEBGL_SHELL_COUNT;
-    shellGeometry.instanceCount = gpuFurEnabled ? SHELL_COUNT : WEBGL_SHELL_COUNT;
-    const cap = gpuFurEnabled ? MAX_STRAND_COUNT : WEBGL_STRAND_COUNT;
-    strandGeometry.instanceCount = Math.floor(cap * sharedUniforms.uFurDensity.value);
+    syncInstanceCounts();
+  }
+
+  function setMobileTier(mobile) {
+    isMobileTier = Boolean(mobile);
+    syncInstanceCounts();
   }
 
   return {
@@ -340,6 +362,7 @@ export function createGPUFurSystem(baseGeometry, initialParams) {
     sharedUniforms,
     updateDensity,
     setGPUFurEnabled,
+    setMobileTier,
     isGPUFurEnabled: () => gpuFurEnabled
   };
 }

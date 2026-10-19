@@ -673,6 +673,161 @@ export function playHappyJumpSound() {
   } catch (e) {}
 }
 
+/**
+ * 17. Cute 3D Cake Feeding sound ("Nom-nom-nom! Yummy~!")
+ */
+export function playFeedTreatSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // 3 cute "Nom! Nom! Nom!" chewing vocal syllables
+    const biteTimes = [0.25, 1.15, 2.05];
+    for (let b = 0; b < biteTimes.length; b++) {
+      const t0 = now + biteTimes[b];
+      playSyllable(ctx, {
+        startTime: t0,
+        duration: 0.13,
+        f0Start: 540 + b * 60,
+        f0End: 780 + b * 75,
+        formantFreq: 1450,
+        gainPeak: 0.38,
+        type: 'triangle',
+        vibratoDepth: 10
+      });
+      playSyllable(ctx, {
+        startTime: t0 + 0.15,
+        duration: 0.11,
+        f0Start: 680 + b * 60,
+        f0End: 520 + b * 50,
+        formantFreq: 1250,
+        gainPeak: 0.34,
+        type: 'sine',
+        vibratoDepth: 8
+      });
+    }
+    // Happy "Yummy~!" chime at the end
+    const endStart = now + 2.85;
+    const yumNotes = [784, 987.77, 1318.5];
+    for (let i = 0; i < yumNotes.length; i++) {
+      playSyllable(ctx, {
+        startTime: endStart + i * 0.085,
+        duration: 0.14,
+        f0Start: yumNotes[i],
+        f0End: yumNotes[i] * 1.18,
+        formantFreq: 2250,
+        gainPeak: 0.38,
+        type: 'sine',
+        vibratoDepth: 16
+      });
+    }
+    triggerVocalMouthBounce(0.85, 3200);
+  } catch (e) {}
+}
+
+/**
+ * 18. 3D Salon Hair Dryer warm breeze + fluffy Mochi chirp
+ */
+export function playHairDryerSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Soft filtered white-noise warm air whoosh
+    const bufferSize = Math.floor(ctx.sampleRate * 2.4);
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.35;
+    }
+    const noise = ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(650, now);
+    filter.frequency.linearRampToValueAtTime(1150, now + 1.2);
+    filter.frequency.linearRampToValueAtTime(720, now + 2.4);
+    filter.Q.setValueAtTime(2.2, now);
+
+    const nGain = ctx.createGain();
+    nGain.gain.setValueAtTime(0.001, now);
+    nGain.gain.linearRampToValueAtTime(0.22, now + 0.25);
+    nGain.gain.setValueAtTime(0.22, now + 1.9);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 2.4);
+
+    noise.connect(filter);
+    filter.connect(nGain);
+    nGain.connect(ctx.destination);
+    noise.start(now);
+    noise.stop(now + 2.42);
+
+    // Happy fluffy Mochi squeak!
+    playSyllable(ctx, {
+      startTime: now + 0.5,
+      duration: 0.16,
+      f0Start: 760,
+      f0End: 1180,
+      formantFreq: 2150,
+      gainPeak: 0.36,
+      type: 'sine'
+    });
+    triggerVocalMouthBounce(0.65, 1800);
+  } catch (e) {}
+}
+
+/**
+ * 19. Floating Soap Bubbles spawn arpeggio
+ */
+export function playBubbleSpawnSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const notes = [659.25, 783.99, 987.77, 1174.66, 1567.98];
+    for (let i = 0; i < notes.length; i++) {
+      playSyllable(ctx, {
+        startTime: now + i * 0.065,
+        duration: 0.09,
+        f0Start: notes[i] * 0.85,
+        f0End: notes[i] * 1.15,
+        formantFreq: 2300,
+        gainPeak: 0.3,
+        type: 'sine',
+        vibratoDepth: 0
+      });
+    }
+    triggerVocalMouthBounce(0.6, 420);
+  } catch (e) {}
+}
+
+/**
+ * 20. Crisp Soap Bubble Pop sound ("Plink-Pop!")
+ */
+export function playBubblePopSound(pitch = 1.0) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    playSyllable(ctx, {
+      startTime: now,
+      duration: 0.055,
+      f0Start: 920 * pitch,
+      f0End: 1860 * pitch,
+      formantFreq: 2500,
+      gainPeak: 0.42,
+      type: 'sine',
+      vibratoDepth: 0
+    });
+    triggerVocalMouthBounce(0.45, 150);
+  } catch (e) {}
+}
+
 export function getActiveVocalEnvelope() {
   return activeVocalEnvelope;
 }
+
