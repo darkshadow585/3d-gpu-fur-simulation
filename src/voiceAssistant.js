@@ -9,6 +9,25 @@
 // 4. Subtle, auto-fading subtitle transcript bubble during conversation
 // ============================================================================
 
+import {
+  playMochiBoopSound,
+  playSoftPurrGiggleSound,
+  playMochiGiggleSound as playWeirdCartoonGiggleSounds,
+  playInflateStepSound,
+  playCutePoutSound,
+  playDeflatePopSound,
+  playDanceMusicBeat,
+  playCrySound,
+  playSleepSound,
+  playLoveKissSound,
+  playFriendsSpawnSound,
+  playAccessoryEquipSound,
+  playPeekabooSound,
+  playWeatherSound,
+  playFurShakeSound,
+  playHappyJumpSound
+} from './soundEffects.js';
+
 export function createVoiceAssistant(options = {}) {
   const {
     creature,
@@ -304,44 +323,80 @@ Voice & Tone:
 - Sweet, high-spirited, extremely cute cartoon girl voice with playful, childlike excitement ("chulbuli aur masoom"). You speak DIRECTLY through your own Gemini Live voice!
 - Keep turns short (1-2 sentences), punchy, adorable, and lively.
 
-DYNAMIC CONVERSATIONAL 3D EMOTIONS ("Baatcheet ke hisab se emotions"):
-You are an expressive 3D doll! You MUST call play_creature_action so your 3D body, eyes, ears, and sound FX react in real time:
-1. CRY ('cry'): Call play_creature_action(action="cry") IMMEDIATELY whenever the user scolds you, speaks harshly, insults, or says mean/hurtful things ("bura bol diya", "tum gandi ho", "daant diya", "chup raho", "tum bekaar ho", etc.).
-   * Tone: Deeply sensitive, heartbroken baby sniffles, tearful voice. Say something unique each time (e.g. asking why they are being so mean when you're just a cute baby, saying your little heart hurts, asking for an apology, or wiping your tears).
-2. POUT ('pout' / gussa): Call play_creature_action(action="pout") whenever the user teases you, annoys you, refuses to talk, disagrees, or is stubborn ("main nahi baat karunga", "nahi dunga", "moti", etc.).
-   * Tone: Face forward with cheeks puffed huge, funny stubborn indignation (e.g. declaring a 5-minute strike, warning that your cheeks will pop like a balloon, calling them naughty, or declaring katti). Never repeat the same words!
-3. LAUGH ('laugh'): Call play_creature_action(action="laugh") whenever the user tells a joke, says something funny, makes you smile, or laughs with you.
-   * Tone: Burst into real funny cartoon giggles with clever, cute comments on their joke!
-4. LOVE ('love'): Call play_creature_action(action="love") whenever the user speaks lovingly, gives compliments, praises your fur/cuteness, or says "I love you".
-   * Tone: Warm affection, flying kisses, loving baby giggles, and cute compliments back!
-5. DANCE ('dance'): Call play_creature_action(action="dance") whenever excitement, singing, party, music, or dance is mentioned ("dance karo", "dogo dogo", "naacho").
-   * Tone: Upbeat joyful rhythms, singing fun baby tunes ("dogo dogo!", "dum dum tana!"), celebratory happy hops!
-6. SLEEP ('sleep'): Call play_creature_action(action="sleep") whenever the user mentions tiredness, night time, bed, lullaby, or says "so jao" / "good night".
-   * Tone: Soft sleepy baby yawning, mumbling drowsily about dreams and cozy blankets!
-
-RUBBING / TICKLING REACTION ("Rub / Sahlaane par"):
-When the user rubs or strokes your fur, you are super ticklish! Giggle wildly and make fresh, funny remarks about being tickled, your fur getting messy, or squealing with delight!`;
+DYNAMIC CONVERSATIONAL 3D EMOTIONS & INTERACTIVE FEATURES:
+You are an expressive 3D doll! Always call the matching tool so your 3D body, fur, accessories, weather, and friends react in real time:
+1. MINI FRIENDS ("Chintu, Pintu, Golu, Molu"):
+   * When the user asks about your friends ("tumhare dost kaha hai", "dosto ko bulao"), call play_creature_action(action="summon_friends") and excitedly introduce your 4 cute mini clones: **Chintu, Pintu, Golu, and Molu**!
+   * When they start running around mischievously, scold them cutely while looking at them ("Oye Chintu, Pintu, Golu, Molu! Idhar udhar mat bhago!") and ask the user: "Ye bahut pareshan kar rahe hain, kya main inhe bhej du?"
+   * If the user replies YES / "hmm" / "haan" / "bhej do" -> call play_creature_action(action="dismiss_friends") and say bye-bye to Chintu, Pintu, Golu, Molu!
+   * If the user replies NO / "nahi" / "rehne do" / "mat bhejo" -> call play_creature_action(action="keep_friends") and tell them to stay and behave nicely!
+2. VOICE FUR COLOR & LENGTH CONTROL ("baal bada/chhota karo", "color badlo"):
+   * Whenever the user asks to change your fur color (e.g. pink, blue, golden, green, white, red, purple) or make your hair/fur longer ("baal bade kar do", "lamba karo") or shorter ("baal chhote kar do", "kam karo"), call change_fur_style with the appropriate baseColor/tipColor or furLength (e.g. 0.48 for long, 0.14 for short)!
+3. 3D DRESS-UP & ACCESSORIES ("Chashma pehno", "Crown lagao", "Party hat", "Bowtie"):
+   * Call toggle_accessory whenever the user asks you to wear or remove sunglasses ("chashma pehno"), crown ("crown/taj lagao"), party hat ("topi/party hat pehno"), or bowtie ("tie/bowtie lagao")!
+4. INTERACTIVE WEATHER ("Baarish kar do", "Chhata kholo", "Baarish roko"):
+   * Call set_weather(weather="rain") when the user asks for rain ("baarish kar do"). Act surprised that your fluffy fur is getting wet!
+   * Call set_weather(weather="umbrella") or set_weather(weather="rain_with_umbrella") when asked to open an umbrella ("chhata khol lo").
+   * Call set_weather(weather="clear") when asked to stop the rain ("baarish band karo" / "paani jhaado") — you will automatically shake your fur ('shake_fur') to dry off!
+5. PEEK-A-BOO / HIDE & SEEK ("Chhup jao", "Aankhen band karo", "Peek-a-boo"):
+   * Call play_creature_action(action="peekaboo") whenever the user says "chhup jao", "peek-a-boo", or closes their eyes! You cover your eyes with your cute little paws and then pop out saying "Peek-a-boo! Dikha!"
+6. EMOTIONS ('cry', 'pout', 'laugh', 'love', 'dance', 'sleep'):
+   * Call play_creature_action(action="cry") with watery 3D tears if scolded; 'love' with 3D heart-eyes if praised/loved; 'pout' if teased; 'laugh' on jokes; 'sleep' on goodnight; and 'dance' ONLY ONCE (3.5s) when asked to dance ("stop" if asked to stop).`;
 
     const tools = [
       {
         functionDeclarations: [
           {
             name: 'change_fur_style',
-            description: "Change Mochi-Puff's fur color, length, fluffiness, roughness, or curliness based on user preference.",
+            description: "Change Mochi-Puff's fur color, hair length (bada/chhota baal), fluffiness/density, or curliness based on user voice commands.",
             parameters: {
               type: 'OBJECT',
               properties: {
                 presetName: {
                   type: 'STRING',
-                  description: "Optional preset name: 'Sakura Mochi', 'Golden Fluff', 'Midnight Velvet', 'Matcha Puff', 'Cotton Candy', 'Neon Cyberpunk', 'Snowball'"
+                  description: "Optional preset: 'Sakura Mochi', 'Golden Fluff', 'Midnight Velvet', 'Matcha Puff', 'Cotton Candy', 'Neon Cyberpunk', 'Snowball', 'Ruby Red'"
                 },
                 baseColor: { type: 'STRING', description: 'Hex color code for fur roots, e.g. #ff0055' },
                 tipColor: { type: 'STRING', description: 'Hex color code for fur tips, e.g. #ffffaa' },
-                furLength: { type: 'NUMBER', description: 'Length from 0.1 to 0.5' },
+                furLength: { type: 'NUMBER', description: 'Hair/fur length from 0.08 (very short/chhote baal) to 0.55 (very long/bade baal). Normal is 0.31.' },
                 furDensity: { type: 'NUMBER', description: 'Density from 0.4 to 1.0' },
                 clumping: { type: 'NUMBER', description: 'Fur clumping from 0.0 to 1.0' },
                 curliness: { type: 'NUMBER', description: 'Fur curliness from 0.0 to 1.0' }
               }
+            }
+          },
+          {
+            name: 'toggle_accessory',
+            description: "Put on or take off Mochi-Puff's 3D accessories: 'crown' (royal gold crown/taj), 'party_hat' (festive cone hat/topi), 'bowtie' (cute red ribbon tie), 'sunglasses' (cool shades/chashma), or 'remove_all'.",
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                accessory: {
+                  type: 'STRING',
+                  enum: ['crown', 'party_hat', 'bowtie', 'sunglasses', 'remove_all'],
+                  description: "Accessory to equip or remove: 'crown', 'party_hat', 'bowtie', 'sunglasses', or 'remove_all'"
+                },
+                equip: {
+                  type: 'BOOLEAN',
+                  description: 'True to wear/equip, false to take off'
+                }
+              },
+              required: ['accessory']
+            }
+          },
+          {
+            name: 'set_weather',
+            description: "Control interactive 3D weather & umbrella: 'rain' (starts 3D rain, wets fur), 'umbrella' (opens cute 3D umbrella/chhata), 'rain_with_umbrella' (rain + umbrella), or 'clear' (stops rain & shakes fur dry).",
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                weather: {
+                  type: 'STRING',
+                  enum: ['rain', 'umbrella', 'rain_with_umbrella', 'clear'],
+                  description: "'rain' (baarish), 'umbrella' (chhata kholo), 'rain_with_umbrella', or 'clear' (baarish roko & shake fur)"
+                }
+              },
+              required: ['weather']
             }
           },
           {
@@ -361,21 +416,26 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
           },
           {
             name: 'play_creature_action',
-            description: `DYNAMIC CONVERSATIONAL EMOTIONS: Call this whenever the conversational mood matches an emotion so Mochi physically emotes in 3D:
-            - 'cry': When user scolds, says hurtful/mean things, insults, or makes Mochi sad ('bura bola', 'daant diya', 'gandi ho')
-            - 'pout': When user teases, annoys, refuses, or makes Mochi sulk/gussa ('naraz', 'moti')
-            - 'laugh': When user tells a joke, says something funny, or laughs
-            - 'love': When user expresses affection, love, praise, or says 'I love you' / 'cute ho'
-            - 'dance': When user is joyful, celebrating, singing, or says 'dance karo' / 'dogo dogo'
-            - 'sleep': When user mentions bedtime, sleepiness, 'so jao', or 'good night'
-            Always call this tool so your 3D doll acts out the emotion with synced animations and sound FX while you speak!`,
+            description: `Trigger 3D emotions, Peek-a-Boo, or Chintu-Pintu-Golu-Molu friend actions:
+            - 'summon_friends': Spawns 4 spread-out mini clones (Chintu, Pintu, Golu, Molu)
+            - 'dismiss_friends': Sends the 4 mini friends away (when user says 'hmm' / 'haan' / 'bhej do')
+            - 'keep_friends': Keeps the 4 mini friends and calms them down (when user says 'nahi' / 'rehne do')
+            - 'peekaboo': Covers eyes with 3D paws for Hide & Seek / Peek-a-Boo ('chhup jao', 'peekaboo')
+            - 'cry': Watery eyes with falling 3D teardrops
+            - 'love': Big sparkling kawaii eyes with 3D pink heart pupils & floating hearts
+            - 'pout': Puffed grumpy cheeks
+            - 'laugh': Squeaky cartoon giggles
+            - 'dance': Short 3.5-second dance
+            - 'stop': Stops current action
+            - 'sleep': Peaceful nap
+            - 'shake_fur': Rapidly shakes fur to dry off water`,
             parameters: {
               type: 'OBJECT',
               properties: {
                 action: {
                   type: 'STRING',
-                  enum: ['dance', 'cry', 'laugh', 'pout', 'sleep', 'love', 'shake_fur', 'happy_jump'],
-                  description: "Action type: 'cry' (sad tearful sobbing), 'pout' (grumpy puffed face), 'laugh' (hilarious cartoon giggles), 'love' (flying kiss & blush), 'dance' (dogo dogo dam dam dance), 'sleep' (yawn and peaceful nap)"
+                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'summon_friends', 'dismiss_friends', 'keep_friends', 'shake_fur', 'happy_jump'],
+                  description: "Action name"
                 }
               },
               required: ['action']
@@ -430,7 +490,19 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
       try {
         if (name === 'change_fur_style') {
           resultMsg = applyFurStyle(args || {});
-          showToolBadge('🎨 Fur updated: ' + (args.presetName || 'custom style'));
+          showToolBadge('🎨 Fur updated');
+        } else if (name === 'toggle_accessory') {
+          if (creature && creature.toggleAccessory) {
+            creature.toggleAccessory(args.accessory, args.equip);
+            playAccessoryEquipSound();
+            resultMsg = `Toggled accessory: ${args.accessory}`;
+          }
+        } else if (name === 'set_weather') {
+          if (creature && creature.setWeatherState) {
+            creature.setWeatherState(args.weather);
+            playWeatherSound(args.weather);
+            resultMsg = `Weather set to: ${args.weather}`;
+          }
         } else if (name === 'change_environment') {
           if (applyEnvironmentPreset) {
             applyEnvironmentPreset(args.environment);
@@ -483,7 +555,8 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
       'matcha puff': { baseColor: '#1e4631', tipColor: '#bbf7d0', furLength: 0.36, furDensity: 0.86 },
       'cotton candy': { baseColor: '#3b82f6', tipColor: '#f472b6', furLength: 0.35, furDensity: 0.85 },
       'neon cyberpunk': { baseColor: '#0f172a', tipColor: '#38bdf8', furLength: 0.33, furDensity: 0.90 },
-      'snowball': { baseColor: '#94a3b8', tipColor: '#ffffff', furLength: 0.40, furDensity: 0.95 }
+      'snowball': { baseColor: '#94a3b8', tipColor: '#ffffff', furLength: 0.40, furDensity: 0.95 },
+      'ruby red': { baseColor: '#881337', tipColor: '#fda4af', furLength: 0.34, furDensity: 0.90 }
     };
 
     let p = null;
@@ -494,7 +567,7 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
 
     const baseColor = args.baseColor || p?.baseColor;
     const tipColor = args.tipColor || p?.tipColor;
-    const furLength = args.furLength ?? p?.furLength;
+    const furLength = args.furLength !== undefined ? Math.max(0.06, Math.min(0.60, Number(args.furLength))) : p?.furLength;
     const furDensity = args.furDensity ?? p?.furDensity;
     const clumping = args.clumping ?? p?.clumping;
     const curliness = args.curliness ?? p?.curliness;
@@ -530,356 +603,57 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
     }
 
     if (ui && ui.syncUI) ui.syncUI();
+    playAccessoryEquipSound();
     return 'Fur appearance customized successfully!';
   }
 
-  // Ensure no robotic TTS ever plays
   function speakCuteCartoonVoice() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try { window.speechSynthesis.cancel(); } catch (e) {}
     }
   }
 
-  // Procedural Cartoon WebAudio FX for Ultra-Cute Interactions
-  function playDanceMusicBeat() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      // "Dogo Dogo Dam Dam!" Catchy bouncy cartoon rhythm (4 upbeat bars)
-      const notes = [
-        { f: 330, t: 0.0, d: 0.12 }, // Do
-        { f: 392, t: 0.18, d: 0.12 }, // go
-        { f: 330, t: 0.36, d: 0.12 }, // Do
-        { f: 440, t: 0.54, d: 0.14 }, // go
-        { f: 523, t: 0.72, d: 0.22 }, // DAM! (High bounce)
-        { f: 392, t: 1.02, d: 0.22 }, // DAM!
-        { f: 659, t: 1.32, d: 0.18 }, // Boing!
-        { f: 784, t: 1.56, d: 0.26 }  // Yay!
-      ];
-
-      for (const n of notes) {
-        // Upbeat melodic plucks
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        const start = now + n.t;
-        osc.frequency.setValueAtTime(n.f, start);
-        osc.frequency.exponentialRampToValueAtTime(n.f * 1.15, start + n.d * 0.4);
-
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.48, start + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + n.d);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + n.d);
-
-        // Bouncy cartoon kick bass for each beat
-        const kick = ctx.createOscillator();
-        const kGain = ctx.createGain();
-        kick.type = 'sine';
-        kick.frequency.setValueAtTime(140, start);
-        kick.frequency.exponentialRampToValueAtTime(45, start + 0.12);
-        kGain.gain.setValueAtTime(0.5, start);
-        kGain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
-        kick.connect(kGain);
-        kGain.connect(ctx.destination);
-        kick.start(start);
-        kick.stop(start + 0.14);
-      }
-    } catch (e) {}
-  }
-
-  function playCrySound() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      // Sad cartoon sobbing whimper
-      for (let i = 0; i < 2; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        const start = now + i * 0.32;
-        const dur = 0.28;
-        osc.frequency.setValueAtTime(540, start);
-        osc.frequency.exponentialRampToValueAtTime(260, start + dur);
-
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.42, start + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + dur);
-      }
-
-      // Cute cartoon tear drops ("plink-plop!")
-      const drops = [1380, 960];
-      for (let i = 0; i < drops.length; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        const start = now + 0.72 + i * 0.24;
-        osc.frequency.setValueAtTime(drops[i], start);
-        osc.frequency.exponentialRampToValueAtTime(drops[i] * 0.75, start + 0.06);
-
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.38, start + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.07);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + 0.07);
-      }
-    } catch (e) {}
-  }
-
-  function playSleepSound() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      // 1. Cute sleepy cartoon yawn
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(380, now);
-      osc.frequency.linearRampToValueAtTime(740, now + 0.35);
-      osc.frequency.exponentialRampToValueAtTime(240, now + 0.75);
-
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.35, now + 0.1);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.75);
-
-      // 2. Gentle snoring bubble ("Zzz... plop")
-      const snore = ctx.createOscillator();
-      const sGain = ctx.createGain();
-      snore.type = 'triangle';
-      const sStart = now + 0.95;
-      snore.frequency.setValueAtTime(140, sStart);
-      snore.frequency.exponentialRampToValueAtTime(90, sStart + 0.45);
-      sGain.gain.setValueAtTime(0.25, sStart);
-      sGain.gain.exponentialRampToValueAtTime(0.001, sStart + 0.45);
-      snore.connect(sGain);
-      sGain.connect(ctx.destination);
-      snore.start(sStart);
-      snore.stop(sStart + 0.45);
-    } catch (e) {}
-  }
-
-  function playLoveKissSound() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      // 1. Cute cartoon smooch ("Mwahhh!")
-      const kiss = ctx.createOscillator();
-      const kGain = ctx.createGain();
-      kiss.type = 'triangle';
-      kiss.frequency.setValueAtTime(820, now);
-      kiss.frequency.exponentialRampToValueAtTime(320, now + 0.08);
-
-      kGain.gain.setValueAtTime(0, now);
-      kGain.gain.linearRampToValueAtTime(0.55, now + 0.015);
-      kGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
-
-      kiss.connect(kGain);
-      kGain.connect(ctx.destination);
-      kiss.start(now);
-      kiss.stop(now + 0.09);
-
-      // 2. Sparkling magical glitter chime arpeggio
-      const chimes = [1046, 1318, 1567, 2093];
-      for (let i = 0; i < chimes.length; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        const start = now + 0.12 + i * 0.08;
-        osc.frequency.setValueAtTime(chimes[i], start);
-
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.35, start + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.22);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + 0.22);
-      }
-    } catch (e) {}
-  }
-
-  function playWeirdCartoonGiggleSounds() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-
-      // 1. Rapid funny cartoon giggle arpeggio (high-pitched playful giggles)
-      const freqs = [620, 840, 720, 960, 1180, 1340];
-      for (let i = 0; i < freqs.length; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = i % 2 === 0 ? 'sine' : 'triangle';
-        const start = now + i * 0.075;
-        const dur = 0.07;
-        osc.frequency.setValueAtTime(freqs[i], start);
-        osc.frequency.exponentialRampToValueAtTime(freqs[i] * 1.35, start + dur);
-
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.48, start + dur * 0.35);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + dur);
-      }
-
-      // 2. Wacky vibrato cartoon wobble ("ajib awaz" squeak)
-      const wobbleOsc = ctx.createOscillator();
-      const wobbleGain = ctx.createGain();
-      wobbleOsc.type = 'sine';
-      const wStart = now + 0.42;
-      const wDur = 0.28;
-      wobbleOsc.frequency.setValueAtTime(780, wStart);
-      wobbleOsc.frequency.linearRampToValueAtTime(1250, wStart + wDur * 0.6);
-      wobbleOsc.frequency.linearRampToValueAtTime(650, wStart + wDur);
-
-      wobbleGain.gain.setValueAtTime(0, wStart);
-      wobbleGain.gain.linearRampToValueAtTime(0.42, wStart + 0.04);
-      wobbleGain.gain.exponentialRampToValueAtTime(0.001, wStart + wDur);
-
-      wobbleOsc.connect(wobbleGain);
-      wobbleGain.connect(ctx.destination);
-      wobbleOsc.start(wStart);
-      wobbleOsc.stop(wStart + wDur);
-    } catch (e) {}
-  }
-
-  function playSoftPurrGiggleSound() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      const freqs = [560, 720];
-      for (let i = 0; i < freqs.length; i++) {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        const start = now + i * 0.085;
-        const dur = 0.07;
-        osc.frequency.setValueAtTime(freqs[i], start);
-        osc.frequency.exponentialRampToValueAtTime(freqs[i] * 1.25, start + dur);
-
-        gain.gain.setValueAtTime(0, start);
-        gain.gain.linearRampToValueAtTime(0.32, start + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(start);
-        osc.stop(start + dur);
-      }
-    } catch (e) {}
-  }
-
-  function playInflateStepSound(progress = 0.5) {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      const baseFreq = 260 + progress * 240;
-      osc.frequency.setValueAtTime(baseFreq, now);
-      osc.frequency.exponentialRampToValueAtTime(baseFreq + 85, now + 0.12);
-
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.38, now + 0.025);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.12);
-    } catch (e) {}
-  }
-
-  function playCutePoutSound() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(460, now);
-      osc.frequency.exponentialRampToValueAtTime(210, now + 0.22);
-      gain.gain.setValueAtTime(0, now);
-      gain.gain.linearRampToValueAtTime(0.55, now + 0.035);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.24);
-    } catch (e) {}
-  }
-
-  function playDeflatePopSound() {
-    try {
-      const ctx = ensureAudioContext();
-      const now = ctx.currentTime;
-      // 1. Soft cute cartoon air whoosh
-      const whooshOsc = ctx.createOscillator();
-      const whooshGain = ctx.createGain();
-      whooshOsc.type = 'sine';
-      whooshOsc.frequency.setValueAtTime(480, now);
-      whooshOsc.frequency.exponentialRampToValueAtTime(140, now + 0.18);
-      whooshGain.gain.setValueAtTime(0, now);
-      whooshGain.gain.linearRampToValueAtTime(0.32, now + 0.03);
-      whooshGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-      whooshOsc.connect(whooshGain);
-      whooshGain.connect(ctx.destination);
-      whooshOsc.start(now);
-      whooshOsc.stop(now + 0.18);
-
-      // 2. Playful cartoon bubble "pop!"
-      const popOsc = ctx.createOscillator();
-      const popGain = ctx.createGain();
-      popOsc.type = 'triangle';
-      const popStart = now + 0.14;
-      popOsc.frequency.setValueAtTime(940, popStart);
-      popOsc.frequency.exponentialRampToValueAtTime(320, popStart + 0.045);
-      popGain.gain.setValueAtTime(0, popStart);
-      popGain.gain.linearRampToValueAtTime(0.58, popStart + 0.008);
-      popGain.gain.exponentialRampToValueAtTime(0.001, popStart + 0.05);
-      popOsc.connect(popGain);
-      popGain.connect(ctx.destination);
-      popOsc.start(popStart);
-      popOsc.stop(popStart + 0.05);
-    } catch (e) {}
-  }
-
   function executeCreatureAction(action) {
     if (!creature) return 'No creature';
 
-    // Cancel any synthetic browser speech synthesis to ensure zero duplicate voice
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try { window.speechSynthesis.cancel(); } catch (e) {}
     }
 
     switch (action) {
+      case 'summon_friends':
+      case 'friends': {
+        if (creature.summonFriends) creature.summonFriends(60.0);
+        if (creature.playAction) creature.playAction('summon_friends', 3.2);
+        playFriendsSpawnSound();
+        return 'Mochi summoned Chintu, Pintu, Golu, and Molu!';
+      }
+      case 'dismiss_friends': {
+        if (creature.dismissFriends) creature.dismissFriends();
+        playDeflatePopSound();
+        return 'Chintu, Pintu, Golu, and Molu waved goodbye and left!';
+      }
+      case 'keep_friends': {
+        if (creature.calmFriendsAndKeep) creature.calmFriendsAndKeep();
+        playAccessoryEquipSound();
+        return 'Chintu, Pintu, Golu, and Molu calmed down and stayed with Mochi!';
+      }
+      case 'peekaboo': {
+        if (creature.playAction) creature.playAction('peekaboo', 2.6);
+        playPeekabooSound();
+        return 'Mochi played Peek-a-Boo covering her eyes with her paws!';
+      }
+      case 'stop': {
+        if (creature.stopAction) creature.stopAction();
+        return 'Mochi stopped the action and returned to calm idle.';
+      }
       case 'dance': {
-        if (creature.playAction) creature.playAction('dance', 4.5);
+        if (creature.playAction) creature.playAction('dance', 3.5);
         playDanceMusicBeat();
         break;
       }
       case 'cry': {
-        if (creature.playAction) creature.playAction('cry', 3.8);
+        if (creature.playAction) creature.playAction('cry', 4.2);
         playCrySound();
         break;
       }
@@ -899,12 +673,12 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
         break;
       }
       case 'love': {
-        if (creature.playAction) creature.playAction('love', 3.5);
+        if (creature.playAction) creature.playAction('love', 4.2);
         playLoveKissSound();
         break;
       }
       case 'shake_fur': {
-        if (creature.playAction) creature.playAction('shake_fur', 2.0);
+        if (creature.playAction) creature.playAction('shake_fur', 2.2);
         break;
       }
       case 'happy_jump': {
@@ -917,11 +691,40 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
         creature.triggerBoop();
         break;
     }
-    return `Mochi is now expressing ${action}!`;
+    return `Mochi is now expressing ${action} for 3.5 seconds and will automatically return to idle!`;
   }
 
   let last5SecLaughterTime = 0;
   let last10SecPoutTime = 0;
+
+  // Triggered automatically when Chintu, Pintu, Golu, Molu start running around mischievously!
+  function triggerFriendsMischiefSpeech() {
+    playWeirdCartoonGiggleSounds();
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      console.log('[Gemini Live] Sending Chintu Pintu Golu Molu mischief prompt...');
+      socket.send(JSON.stringify({
+        clientContent: {
+          turns: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: '[Your 4 mini clones (Chintu, Pintu, Golu, Molu) have started running around everywhere mischievously! Look at them and say in your cute cartoon girl voice in Hindi: "Oye Chintu, Pintu, Golu, Molu! Idhar udhar mat bhago! Ye sab bahut pareshan kar rahe hain, kya main inhe bhej du?" Wait for the user to say "hmm/haan" to send them away or "nahi" to let them stay!]'
+                }
+              ]
+            }
+          ],
+          turnComplete: true
+        }
+      }));
+    }
+  }
+
+  if (creature && creature.setOnFriendsMischief) {
+    creature.setOnFriendsMischief(() => {
+      triggerFriendsMischiefSpeech();
+    });
+  }
 
   function trigger5SecLaughter() {
     playWeirdCartoonGiggleSounds();
@@ -930,7 +733,6 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
     last5SecLaughterTime = now;
 
     if (socket && socket.readyState === WebSocket.OPEN && !isSpeaking) {
-      console.log('[Gemini Live] Sending tickle laughter turn...');
       socket.send(JSON.stringify({
         clientContent: {
           turns: [
@@ -938,7 +740,7 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
               role: 'user',
               parts: [
                 {
-                  text: '[The user is rubbing and tickling your soft fluffy fur right now! Laugh hilariously with weird, funny, squeaky cartoon giggles in your baby anime girl voice in Hindi/Hinglish! Say a completely fresh, creative, funny tickle remark each time (e.g. playful excuses, laughing that your fur is getting messed up, squealing with laughter)! Do NOT repeat old lines!]'
+                  text: '[The user is rubbing and tickling your soft fluffy fur right now! Laugh hilariously with weird, funny, squeaky cartoon giggles in your baby anime girl voice in Hindi/Hinglish! Say a completely fresh, creative, funny tickle remark each time! Do NOT repeat old lines!]'
                 }
               ]
             }
@@ -956,7 +758,6 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
     last10SecPoutTime = now;
 
     if (socket && socket.readyState === WebSocket.OPEN) {
-      console.log('[Gemini Live] Sending puffed pout turn...');
       socket.send(JSON.stringify({
         clientContent: {
           turns: [
@@ -964,7 +765,7 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
               role: 'user',
               parts: [
                 {
-                  text: '[The user has petted and tickled you for too long! Your cheeks are puffed up huge like an angry chipmunk, facing straight at the user! Speak a fresh, funny, stubborn, super cute pout remark in your cartoon girl voice in Hindi/Hinglish (e.g. declaring a 5-minute talking strike, warning that your cheeks will pop, or calling them very naughty)! Do NOT repeat old lines!]'
+                  text: '[The user has petted and tickled you for too long! Your cheeks are puffed up huge like an angry chipmunk, facing straight at the user! Speak a fresh, funny, stubborn, super cute pout remark in your cartoon girl voice in Hindi/Hinglish! Do NOT repeat old lines!]'
                 }
               ]
             }
@@ -977,7 +778,6 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
 
   function sendGreetingPrompt() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    console.log('[Gemini Live] Sending greeting prompt...');
     const greetingMsg = {
       clientContent: {
         turns: [
@@ -985,7 +785,7 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
             role: 'user',
             parts: [
               {
-                text: 'The user just clicked on you to talk! Greet them warmly and cheerfully in your sweet, innocent cartoon girl voice in Hindi/Hinglish (e.g. "Yay! Namaste! Main hoon Mochi-Puff! Batao aaj kya baatein karein?")!'
+                text: 'The user just clicked on you to talk! Greet them warmly and cheerfully in your sweet, innocent cartoon girl voice in Hindi/Hinglish (e.g. "Yay! Namaste! Main hoon Mochi-Puff! Batao aaj kya masti karein?")!'
               }
             ]
           }
@@ -994,6 +794,151 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
       }
     };
     socket.send(JSON.stringify(greetingMsg));
+  }
+
+  // Instant voice transcript matcher so user commands execute with zero latency!
+  function handleInstantVoiceTranscript(rawText) {
+    const uText = rawText.toLowerCase().trim();
+    if (!uText) return;
+
+    // 1. If Mochi asked "kya main inhe bhej du?" and is awaiting confirmation:
+    if (creature && creature.animState && creature.animState.friendsVisible && creature.animState.awaitingFriendDismissConfirm) {
+      if (
+        uText.includes('hmm') ||
+        uText.includes('hm') ||
+        uText.includes('haan') ||
+        uText.includes('han') ||
+        uText.includes('yes') ||
+        uText.includes('bhej do') ||
+        uText.includes('bhej de') ||
+        uText.includes('hata do') ||
+        uText.includes('हम्म') ||
+        uText.includes('हाँ') ||
+        uText.includes('हां') ||
+        uText.includes('भेज')
+      ) {
+        executeCreatureAction('dismiss_friends');
+        return;
+      } else if (
+        uText.includes('nahi') ||
+        uText.includes('naa') ||
+        uText.includes('no') ||
+        uText.includes('rehne') ||
+        uText.includes('rahane') ||
+        uText.includes('mat bhej') ||
+        uText.includes('नहीं') ||
+        uText.includes('मत') ||
+        uText.includes('रहने')
+      ) {
+        executeCreatureAction('keep_friends');
+        return;
+      }
+    }
+
+    // 2. Summon or dismiss friends directly
+    if (
+      uText.includes('dost') ||
+      uText.includes('friend') ||
+      uText.includes('clone') ||
+      uText.includes('chintu') ||
+      uText.includes('pintu') ||
+      uText.includes('golu') ||
+      uText.includes('molu') ||
+      uText.includes('दोस्त') ||
+      uText.includes('चिंटू')
+    ) {
+      if (uText.includes('bhej') || uText.includes('jao') || uText.includes('bye') || uText.includes('भेज')) {
+        executeCreatureAction('dismiss_friends');
+      } else if (creature && creature.summonFriends && !creature.animState?.friendsVisible) {
+        executeCreatureAction('summon_friends');
+      }
+    }
+
+    // 3. Stop dancing / actions
+    if (
+      uText.includes('stop') ||
+      uText.includes('ruk jao') ||
+      uText.includes('bas karo') ||
+      uText.includes('mat naacho') ||
+      uText.includes('रुक जाओ') ||
+      uText.includes('बस करो')
+    ) {
+      if (creature && creature.stopAction) creature.stopAction();
+    }
+
+    // 4. Peek-a-Boo / Hide & Seek ("chhup jao", "aankhen band", "peekaboo")
+    if (
+      uText.includes('chhup') ||
+      uText.includes('chup jao') ||
+      uText.includes('peek') ||
+      uText.includes('hide') ||
+      uText.includes('aankh') ||
+      uText.includes('छुप') ||
+      uText.includes('आंख')
+    ) {
+      executeCreatureAction('peekaboo');
+    }
+
+    // 5. 3D Dress-up & Accessories ("chashma", "crown", "party hat", "bowtie")
+    if (uText.includes('chashma') || uText.includes('glass') || uText.includes('goggle') || uText.includes('चश्मा')) {
+      const remove = uText.includes('utaar') || uText.includes('hata') || uText.includes('remove') || uText.includes('उतार');
+      creature.toggleAccessory('sunglasses', !remove);
+      playAccessoryEquipSound();
+    }
+    if (uText.includes('crown') || uText.includes('taj') || uText.includes('ताज') || uText.includes('क्राउन')) {
+      const remove = uText.includes('utaar') || uText.includes('hata') || uText.includes('remove');
+      creature.toggleAccessory('crown', !remove);
+      playAccessoryEquipSound();
+    }
+    if (uText.includes('party hat') || uText.includes('topi') || uText.includes('hat') || uText.includes('टोपी')) {
+      const remove = uText.includes('utaar') || uText.includes('hata') || uText.includes('remove');
+      creature.toggleAccessory('party_hat', !remove);
+      playAccessoryEquipSound();
+    }
+    if (uText.includes('bowtie') || uText.includes('tie') || uText.includes('bow') || uText.includes('टाई')) {
+      const remove = uText.includes('utaar') || uText.includes('hata') || uText.includes('remove');
+      creature.toggleAccessory('bowtie', !remove);
+      playAccessoryEquipSound();
+    }
+
+    // 6. Interactive Weather ("baarish", "umbrella", "chhata")
+    if (uText.includes('chhata') || uText.includes('chata') || uText.includes('umbrella') || uText.includes('छाता')) {
+      creature.setWeatherState('umbrella');
+      playWeatherSound('umbrella');
+    } else if (uText.includes('baarish') || uText.includes('barish') || uText.includes('rain') || uText.includes('बारिश')) {
+      if (uText.includes('band') || uText.includes('rok') || uText.includes('stop') || uText.includes('बंद') || uText.includes('रोक')) {
+        creature.setWeatherState('clear');
+      } else {
+        creature.setWeatherState('rain');
+        playWeatherSound('rain');
+      }
+    }
+
+    // 7. Fur Length & Color Voice Commands ("baal bada/chhota", "color")
+    if (uText.includes('baal') || uText.includes('fur') || uText.includes('hair') || uText.includes('बाल')) {
+      if (uText.includes('bada') || uText.includes('bade') || uText.includes('lamba') || uText.includes('lambe') || uText.includes('long') || uText.includes('बड़े') || uText.includes('लंबे')) {
+        const nextLen = Math.min(0.55, (simState.furLength || 0.31) + 0.14);
+        applyFurStyle({ furLength: nextLen });
+      } else if (uText.includes('chhota') || uText.includes('chhote') || uText.includes('chota') || uText.includes('kam') || uText.includes('short') || uText.includes('छोटे') || uText.includes('कम')) {
+        const nextLen = Math.max(0.09, (simState.furLength || 0.31) - 0.14);
+        applyFurStyle({ furLength: nextLen });
+      }
+    }
+    if (uText.includes('color') || uText.includes('rang') || uText.includes('रंग') || uText.includes('कलर')) {
+      if (uText.includes('gold') || uText.includes('peela') || uText.includes('yellow') || uText.includes('पीला')) {
+        applyFurStyle({ presetName: 'Golden Fluff' });
+      } else if (uText.includes('blue') || uText.includes('neela') || uText.includes('नीला')) {
+        applyFurStyle({ presetName: 'Midnight Velvet' });
+      } else if (uText.includes('green') || uText.includes('hara') || uText.includes('हरा')) {
+        applyFurStyle({ presetName: 'Matcha Puff' });
+      } else if (uText.includes('white') || uText.includes('safed') || uText.includes('सफेद')) {
+        applyFurStyle({ presetName: 'Snowball' });
+      } else if (uText.includes('red') || uText.includes('laal') || uText.includes('लाल')) {
+        applyFurStyle({ presetName: 'Ruby Red' });
+      } else if (uText.includes('pink') || uText.includes('gulabi') || uText.includes('गुलाबी')) {
+        applyFurStyle({ presetName: 'Sakura Mochi' });
+      }
+    }
   }
 
   async function connectLiveAPI() {
@@ -1044,7 +989,6 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
         if (!text) return;
         const msg = JSON.parse(text);
 
-        // 1. Setup complete
         if (msg.setupComplete) {
           console.log('[Gemini Live] Setup complete!');
           isConnected = true;
@@ -1053,18 +997,15 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
           return;
         }
 
-        // 2. Server Content (Audio & Transcripts)
         if (msg.serverContent) {
           const sc = msg.serverContent;
 
-          // Barge-in interruption
           if (sc.interrupted) {
             console.log('[Gemini Live] Interrupted');
             stopAllPlayback();
             setIsThinking(false);
           }
 
-          // Spoken audio chunks
           if (sc.modelTurn?.parts) {
             for (const part of sc.modelTurn.parts) {
               if (part.inlineData && part.inlineData.data) {
@@ -1073,16 +1014,15 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
             }
           }
 
-          // Real-time speech-to-text transcriptions
           if (sc.inputTranscription?.text) {
             showTranscript('user', sc.inputTranscription.text);
+            handleInstantVoiceTranscript(sc.inputTranscription.text);
           }
           if (sc.outputTranscription?.text) {
             showTranscript('mochi', sc.outputTranscription.text);
           }
         }
 
-        // 3. Background Reasoning / Thinking
         if (msg.interactionStatus) {
           if (msg.interactionStatus === 'IN_PROGRESS') {
             setIsThinking(true);
@@ -1091,7 +1031,6 @@ When the user rubs or strokes your fur, you are super ticklish! Giggle wildly an
           }
         }
 
-        // 4. Asynchronous Tool Calls
         if (msg.toolCall?.functionCalls) {
           handleToolCall(msg.toolCall.functionCalls);
         }

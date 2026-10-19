@@ -6,6 +6,7 @@ import { createGPUFurSystem } from './furSystem.js';
 import { createMinimalUI, FUR_PRESETS } from './ui.js';
 import { createEnvironmentManager } from './environments.js';
 import { createVoiceAssistant } from './voiceAssistant.js';
+import { playMochiBoopSound } from './soundEffects.js';
 
 const container = document.getElementById('canvas-container');
 const uiContainer = document.getElementById('ui-root');
@@ -88,6 +89,12 @@ scene.add(hemiLight);
 // 4. Create Stylized Blob Creature ("Mochi-Puff") + Hybrid GPU Fur + GPGPU Physics
 const creature = createBlobCreature();
 scene.add(creature.root);
+if (creature.friendsContainer) {
+  scene.add(creature.friendsContainer);
+}
+if (creature.rainContainer) {
+  scene.add(creature.rainContainer);
+}
 
 const gpuPhysics = createGPUFurPhysics(renderer);
 // Automatic WebGL fallback if GPGPU ping-pong physics is unsupported by the device/browser
@@ -480,24 +487,39 @@ window.addEventListener('pointerup', (e) => {
     if (isEventOnUIOverlay(e)) {
       return;
     }
-    // Verify raycast on exact click location directly against bodyMesh
+    // Verify raycast on exact click location directly against bodyMesh or mini friends
     pointerNDC.x = (e.clientX / window.innerWidth) * 2.0 - 1.0;
     pointerNDC.y = -(e.clientY / window.innerHeight) * 2.0 + 1.0;
     raycaster.setFromCamera(pointerNDC, camera);
     const hits = raycaster.intersectObject(creature.bodyMesh, false);
     const isDollClicked = hits.length > 0 || isPointerOverCreature;
 
-    if (isDollClicked) {
+    // Also check if user clicked one of the 4 mini friends (Chintu, Pintu, Golu, Molu)!
+    let isFriendClicked = false;
+    if (!isDollClicked && creature.friendsContainer && creature.friendsContainer.visible) {
+      const friendHits = raycaster.intersectObject(creature.friendsContainer, true);
+      if (friendHits.length > 0) {
+        isFriendClicked = true;
+      }
+    }
+
+    if (isFriendClicked) {
+      // Extra high-pitched baby clone squeak + happy bounce!
+      playMochiBoopSound(1.38);
+      creature.triggerBoop(true);
+      boopShockwave = 0.85;
+    } else if (isDollClicked) {
+      boopShockwave = 1.0;
       const handledVoice = voiceAssistant && voiceAssistant.handleCreatureClick();
       if (!handledVoice) {
         creature.triggerBoop();
-        boopShockwave = 1.0;
       }
     } else if (simState.environment === 'ar' && tapToPlaceEnabled) {
       const planeHit = envManager.estimatePlaneAt(pointerNDC.x, pointerNDC.y);
       if (planeHit && planeHit.point) {
         pointerNDC.set(0, 0);
         creature.placeAt(planeHit.point, planeHit.normal, true, camera.position);
+        playMochiBoopSound(1.12);
         envManager.triggerPlacementPulse(planeHit.point);
         if (hudHint) {
           hudHint.textContent = `Placed Mochi on ${planeHit.surfaceType} · Estimated Depth: ${planeHit.depth.toFixed(2)}m (${Math.round(planeHit.confidence * 100)}% conf)`;
@@ -507,20 +529,37 @@ window.addEventListener('pointerup', (e) => {
   }
 });
 
-// 8. Background Keyboard Shortcuts for Actions (Keys 1-6) without UI tags
+// 8. Background Keyboard Shortcuts for Actions (Keys 1-9, 0, C/G/H/B) without UI tags
 window.addEventListener('keydown', (e) => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+  const key = e.key.toLowerCase();
   const keyMap = {
     '1': 'dance',
     '2': 'cry',
     '3': 'laugh',
     '4': 'pout',
     '5': 'sleep',
-    '6': 'love'
+    '6': 'love',
+    '7': 'summon_friends',
+    '8': 'peekaboo',
+    '0': 'stop'
   };
-  const action = keyMap[e.key];
-  if (action && voiceAssistant && voiceAssistant.playAction) {
-    voiceAssistant.playAction(action);
+  if (keyMap[key] && voiceAssistant && voiceAssistant.playAction) {
+    voiceAssistant.playAction(keyMap[key]);
+    return;
+  }
+  if (key === '9' && creature && creature.setWeatherState) {
+    const cur = creature.animState?.weatherMode || 'clear';
+    const next = cur === 'clear' ? 'rain' : (cur === 'rain' ? 'umbrella' : 'clear');
+    creature.setWeatherState(next);
+  } else if (key === 'c' && creature && creature.toggleAccessory) {
+    creature.toggleAccessory('crown');
+  } else if (key === 'g' && creature && creature.toggleAccessory) {
+    creature.toggleAccessory('sunglasses');
+  } else if (key === 'h' && creature && creature.toggleAccessory) {
+    creature.toggleAccessory('party_hat');
+  } else if (key === 'b' && creature && creature.toggleAccessory) {
+    creature.toggleAccessory('bowtie');
   }
 });
 
@@ -700,6 +739,8 @@ function animate() {
   // Update active 3D / AR environment (Studio, Meadow, Cozy Highrise, AR View)
   envManager.update(elapsedTime, simState.windStrength, creature.root);
 
+  const wetness = creature.animState ? (creature.animState.wetness || 0.0) : 0.0;
+
   let physicsTexture = gpuPhysics.fallbackTexture;
   if (simState.gpuFurEnabled) {
     // Step GPGPU ping-pong Verlet physics texture (active when GPU Fur is toggled ON)
@@ -716,7 +757,8 @@ function animate() {
     });
   } else {
     // Lightweight WebGL analytical spring-damper inertia (Zero GPGPU RTT passes)
-    webglForceTmp.set(0, -0.32, 0);
+    // Wetness makes the fur heavier so it droops downward further in Y
+    webglForceTmp.set(0, -0.32 - wetness * 0.65, 0);
     webglForceTmp.addScaledVector(creature.animState.velocity, -1.65);
     if (isPointerOverCreature) {
       webglForceTmp.addScaledVector(pointerVelocity, 0.85);
@@ -730,7 +772,7 @@ function animate() {
     }
   }
 
-  // Update shared fur uniforms
+  // Update shared fur uniforms (including wet heavy fur clumping & glossy sheen during 3D rain!)
   const u = furSystem.sharedUniforms;
   u.uPhysicsTex.value = physicsTexture;
   u.uTime.value = elapsedTime;
@@ -738,6 +780,12 @@ function animate() {
   u.uPointerActive.value = isPointerOverCreature ? 1.0 : 0.0;
   u.uWebGLInertia.value.copy(webglInertiaDisp);
   u.uBoopShockwave.value = boopShockwave;
+  if (u.uSpecular) {
+    u.uSpecular.value = (simState.specular || 0.72) * (1.0 + wetness * 0.45);
+  }
+  if (u.uClumping) {
+    u.uClumping.value = Math.min(1.0, (simState.clumping || 0.52) + wetness * 0.35);
+  }
 
   renderer.render(scene, camera);
 }
