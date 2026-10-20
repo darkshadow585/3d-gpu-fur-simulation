@@ -1,11 +1,78 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
+import { WebSocketServer, WebSocket } from 'ws';
 
 function apiPlugin(apiKey: string) {
   return {
     name: 'mochi-api-server',
     configureServer(server: any) {
+      const wss = new WebSocketServer({ noServer: true });
+      server.httpServer?.on('upgrade', (req: any, socket: any, head: any) => {
+        const parsedUrl = new URL(req.url || '/', 'http://localhost:3000');
+        if (parsedUrl.pathname === '/live') {
+          wss.handleUpgrade(req, socket, head, (clientWs: any) => {
+            wss.emit('connection', clientWs, req);
+          });
+        }
+      });
+
+      wss.on('connection', (clientWs: any) => {
+        if (!apiKey) {
+          clientWs.close(1008, 'API key missing');
+          return;
+        }
+        const googleWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+        const googleWs = new WebSocket(googleWsUrl);
+        const pendingFromClient: any[] = [];
+
+        googleWs.on('open', () => {
+          while (pendingFromClient.length > 0) {
+            const data = pendingFromClient.shift();
+            googleWs.send(data);
+          }
+        });
+
+        googleWs.on('message', (data: any) => {
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(data.toString());
+          }
+        });
+
+        googleWs.on('error', (err: any) => {
+          console.error('[Gemini Live Proxy] Google WS error:', err?.message || err);
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.close(1011, 'Google Live API error');
+          }
+        });
+
+        googleWs.on('close', () => {
+          if (clientWs.readyState === WebSocket.OPEN) {
+            clientWs.close();
+          }
+        });
+
+        clientWs.on('message', (msg: any) => {
+          if (googleWs.readyState === WebSocket.OPEN) {
+            googleWs.send(msg.toString());
+          } else {
+            pendingFromClient.push(msg.toString());
+          }
+        });
+
+        clientWs.on('close', () => {
+          if (googleWs.readyState === WebSocket.OPEN) {
+            googleWs.close();
+          }
+        });
+
+        clientWs.on('error', () => {
+          if (googleWs.readyState === WebSocket.OPEN) {
+            googleWs.close();
+          }
+        });
+      });
+
       server.middlewares.use(async (req: any, res: any, next: any) => {
         const parsedUrl = new URL(req.url || '/', 'http://localhost:3000');
         if (parsedUrl.pathname === '/api/config') {
@@ -47,10 +114,10 @@ Return ONLY a valid JSON object in this exact schema:
 
                 let geminiRes: any = null;
                 try {
-                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500));
+                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500));
                   geminiRes = await Promise.race([
                     ai.models.generateContent({
-                      model: 'gemini-3.8-flash',
+                      model: 'gemini-3.1-flash-lite',
                       contents: prompt
                     }),
                     timeoutPromise

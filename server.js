@@ -84,10 +84,10 @@ Return ONLY a valid JSON object in this exact schema:
 
             let geminiRes = null;
             try {
-              const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500));
+              const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500));
               geminiRes = await Promise.race([
                 ai.models.generateContent({
-                  model: 'gemini-3.8-flash',
+                  model: 'gemini-3.1-flash-lite',
                   contents: prompt
                 }),
                 timeoutPromise
@@ -193,6 +193,77 @@ Return ONLY a valid JSON object in this exact schema:
     }
     res.end('Internal Server Error');
   }
+});
+
+const { WebSocketServer, WebSocket } = require('ws');
+const wss = new WebSocketServer({ noServer: true });
+
+server.on('upgrade', (req, socket, head) => {
+  const parsedUrl = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  if (parsedUrl.pathname === '/live') {
+    wss.handleUpgrade(req, socket, head, (clientWs) => {
+      wss.emit('connection', clientWs, req);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+wss.on('connection', (clientWs) => {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+  if (!apiKey) {
+    clientWs.close(1008, 'API key missing');
+    return;
+  }
+  const googleWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+  const googleWs = new WebSocket(googleWsUrl);
+  const pendingFromClient = [];
+
+  googleWs.on('open', () => {
+    while (pendingFromClient.length > 0) {
+      const data = pendingFromClient.shift();
+      googleWs.send(data);
+    }
+  });
+
+  googleWs.on('message', (data) => {
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.send(data.toString());
+    }
+  });
+
+  googleWs.on('error', (err) => {
+    console.error('[Gemini Live Proxy Production] Google WS error:', err?.message || err);
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.close(1011, 'Google Live API error');
+    }
+  });
+
+  googleWs.on('close', () => {
+    if (clientWs.readyState === WebSocket.OPEN) {
+      clientWs.close();
+    }
+  });
+
+  clientWs.on('message', (msg) => {
+    if (googleWs.readyState === WebSocket.OPEN) {
+      googleWs.send(msg.toString());
+    } else {
+      pendingFromClient.push(msg.toString());
+    }
+  });
+
+  clientWs.on('close', () => {
+    if (googleWs.readyState === WebSocket.OPEN) {
+      googleWs.close();
+    }
+  });
+
+  clientWs.on('error', () => {
+    if (googleWs.readyState === WebSocket.OPEN) {
+      googleWs.close();
+    }
+  });
 });
 
 server.listen(PORT, HOST, () => {

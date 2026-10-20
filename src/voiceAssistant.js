@@ -201,6 +201,9 @@ export function createVoiceAssistant(options = {}) {
   }
 
   function queueAudioPlayback(base64Pcm24k) {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
     const ctx = ensureAudioContext();
     const int16Array = base64ToInt16Array(base64Pcm24k);
     if (int16Array.length === 0) return;
@@ -238,6 +241,9 @@ export function createVoiceAssistant(options = {}) {
   }
 
   function stopAllPlayback() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
     for (const src of activeAudioSources) {
       try { src.stop(); } catch (e) {}
     }
@@ -662,6 +668,16 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
   function speakCuteCartoonVoice(text, onComplete) {
     if (!text) return;
+
+    // CRITICAL: If Gemini 3.8 Live is active, NEVER speak offline browser TTS (prevents double voice)
+    if (isConnected || (socket && socket.readyState === WebSocket.OPEN)) {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+      }
+      if (onComplete) onComplete();
+      return;
+    }
+
     ensureAudioContext();
 
     showTranscript('mochi', text);
@@ -999,6 +1015,12 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       ) {
         creature.emotionEngine.feedStimulus('sleep', 1.2);
       }
+    }
+
+    // CRITICAL: If Gemini 3.8 Live is connected, it natively handles tool calling & voice!
+    // Do not run offline scripted responses or speech on top of it.
+    if (isConnected || (socket && socket.readyState === WebSocket.OPEN)) {
+      return false;
     }
 
     // 1. If Mochi asked "kya main inhe bhej du?" and is awaiting confirmation:
@@ -1364,12 +1386,6 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
   }
 
   async function connectLiveAPI() {
-    const key = getApiKey();
-    if (!key) {
-      updateHud('⚠️ Please set GEMINI_API_KEY in your .env file to talk with Mochi-Puff');
-      return;
-    }
-
     ensureAudioContext();
     stopAllPlayback();
     if (socket) {
@@ -1379,13 +1395,15 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
     updateHud('⏳ Connecting to Gemini 3.8 Live...');
 
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${proto}//${window.location.host}/live`;
 
     try {
       socket = new WebSocket(wsUrl);
       socket.binaryType = 'arraybuffer';
     } catch (e) {
-      updateHud('❌ WebSocket connection failed');
+      console.warn('[Voice] /live WebSocket init error, falling back to speech recognition:', e);
+      toggleSpeechListening();
       return;
     }
 
@@ -1458,8 +1476,8 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       }
     };
 
-    socket.onerror = () => {
-      updateHud('❌ Connection error. Check GEMINI_API_KEY in .env');
+    socket.onerror = (err) => {
+      console.warn('[Voice] Gemini 3.8 Live proxy error:', err);
       isConnected = false;
       stopMicrophone();
     };
@@ -1655,7 +1673,11 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
   function handleCreatureClick() {
     creature?.triggerBoop();
-    toggleSpeechListening();
+    if (isConnected || isListening) {
+      disconnectLiveAPI();
+    } else {
+      connectLiveAPI();
+    }
     return true;
   }
 
