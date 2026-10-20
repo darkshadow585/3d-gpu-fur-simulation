@@ -317,8 +317,22 @@ export function createVoiceAssistant(options = {}) {
 
       isListening = true;
       updateHud('🎙️ Mochi-Puff is listening... Speak in Hindi or English! Click Mochi to stop.');
-    } catch (_err) {
-      // Gracefully handle browser/iframe microphone permission denial without throwing console errors
+    } catch (err) {
+      console.warn('[Microphone Diagnostic Check]', {
+        hasMediaDevices: Boolean(navigator && navigator.mediaDevices),
+        hasGetUserMedia: Boolean(navigator && navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+        secureContext: window.isSecureContext,
+        protocol: window.location.protocol,
+        errorName: err?.name,
+        errorMessage: err?.message
+      });
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        console.warn('[Microphone Diagnostic] Browser is blocking microphone permissions. Please check site permissions in your browser settings.');
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        console.warn('[Microphone Diagnostic] No microphone input device found on this system.');
+      } else {
+        console.warn('[Microphone Diagnostic] Media stream initialization failed:', err?.message || err);
+      }
       isListening = false;
       updateHud('🔊 Mochi-Puff audio ready · Enable mic permission to speak, or tap Mochi / keys (1-9, F, D, V)!');
     }
