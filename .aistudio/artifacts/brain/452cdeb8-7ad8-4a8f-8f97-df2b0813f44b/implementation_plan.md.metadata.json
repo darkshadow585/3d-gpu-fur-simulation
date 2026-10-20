@@ -1,6 +1,6 @@
 {
-  "summary": "Implementation plan for fixing microphone iframe permissions, upgrading Mochi-Puff's 3D anime tears outside the fur shell radius, adding interactive 3D Feeding/Treats, Hair Salon Blow-Dryer, and Pop-able Soap Bubbles, and implementing Mobile 60 FPS adaptive GPU optimization.",
-  "updatedAt": "2026-10-19T14:12:39.215523972Z",
+  "summary": "Implementation plan for silencing unintended offline browser TTS when stopping the microphone or using Gemini 3.8 Live, and adding three new interactive 3D play experiences to Mochi-Puff: Magic Wand with Levitation & Butterflies, 3D Selfie Camera Pose & Funny Props, and 3D Musical Concert with Guitar & Dhol.",
+  "updatedAt": "2026-10-20T10:52:50.964404790Z",
   "requestFeedback": true,
   "userFacing": true
 }

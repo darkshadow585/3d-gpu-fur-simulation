@@ -81,6 +81,26 @@ export const ENVIRONMENT_PRESETS = [
     ambientIntensity: 0.68,
     exposure: 1.08,
     rimLightPos: [-2.2, 1.8, -3.0]
+  },
+  {
+    id: 'clones',
+    name: 'Mochi Clones',
+    subtitle: '5 Mini Clones Utpat',
+    lightAngle: -54,
+    lightIntensity: 1.40,
+    rimIntensity: 1.38,
+    windStrength: 1.05,
+    keyColor: '#fff7ed',
+    rimColor: '#f472b6',
+    hemiSkyColor: '#fae8ff',
+    hemiGroundColor: '#1e1b4b',
+    hemiIntensity: 0.92,
+    envSkyColor: '#f5d0fe',
+    envGroundColor: '#1e1b4b',
+    envTintStrength: 0.12,
+    ambientIntensity: 0.66,
+    exposure: 1.10,
+    rimLightPos: [-2.4, 1.8, -3.2]
   }
 ];
 
@@ -3937,7 +3957,8 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
 
     document.body.setAttribute('data-env', safeId);
 
-    studioGroup.visible = safeId === 'studio';
+    studioGroup.visible = safeId === 'studio' || safeId === 'clones';
+    studioShadowMesh.visible = safeId === 'studio';
     meadowGroup.visible = safeId === 'meadow';
     highriseGroup.visible = safeId === 'highrise';
     arGroup.visible = safeId === 'ar';
@@ -4050,9 +4071,11 @@ export function createEnvironmentManager({ scene, renderer, container, keyLight,
     const shadowScale = 1.0 - creatureRoot.position.y * 0.45;
     const cx = creatureRoot.position.x * 0.7;
 
-    if (currentEnvId === 'studio') {
-      studioShadowMesh.scale.set(shadowScale, shadowScale, 1.0);
-      studioShadowMesh.position.x = cx;
+    if (currentEnvId === 'studio' || currentEnvId === 'clones') {
+      if (currentEnvId === 'studio') {
+        studioShadowMesh.scale.set(shadowScale, shadowScale, 1.0);
+        studioShadowMesh.position.x = cx;
+      }
       studioMotes.rotation.y = elapsedTime * 0.04;
     } else if (currentEnvId === 'meadow') {
       meadowUniforms.uTime.value = elapsedTime;

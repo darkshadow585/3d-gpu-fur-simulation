@@ -77,7 +77,7 @@ function apiPlugin(apiKey: string) {
         const parsedUrl = new URL(req.url || '/', 'http://localhost:3000');
         if (parsedUrl.pathname === '/api/config') {
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ hasGeminiKey: Boolean(apiKey) }));
+          res.end(JSON.stringify({ hasGeminiKey: Boolean(apiKey), apiKey: apiKey || '' }));
           return;
         }
         if (parsedUrl.pathname === '/api/chat' && req.method === 'POST') {
@@ -87,6 +87,7 @@ function apiPlugin(apiKey: string) {
             try {
               const parsed = JSON.parse(body || '{}');
               const userQuery = String(parsed.message || '').trim();
+              const audioBase64 = String(parsed.audioBase64 || '').trim();
               const emContext = String(parsed.emotionContext || '').trim();
 
               let GoogleGenAI: any = null;
@@ -98,27 +99,38 @@ function apiPlugin(apiKey: string) {
               if (apiKey && GoogleGenAI) {
                 const ai = new GoogleGenAI({ apiKey });
                 const prompt = `System: You are Mochi-Puff, an irresistibly cute, masoom (innocent), and chulbuli baby anime/cartoon girl doll living inside an interactive 3D GPU fur simulation.
-Tone & Persona: High-pitched sweet cartoon baby anime girl voice in natural conversational Hindi/Hinglish with adorable squeaks and giggles ("Aww!", "Kyaaa!", "Hee-hee!", "Yay!", "Uff!"). Keep answers short (1-2 sentences), snappy, and super cute!
+Tone & Persona: High-pitched sweet cartoon baby anime girl voice in natural conversational Hindi/Hinglish with adorable squeaks and giggles ("Aww!", "Kyaaa!", "Hee-hee!", "Yay!", "Uff!"). Keep answers short (1-2 sentences), snappy, and super cute! Never repeat the same phrase twice!
 Knowledge Master: You have vast, encyclopedic knowledge! You answer ANY questions accurately (e.g. Current President of India is Smt. Droupadi Murmu, Prime Minister is Shri Narendra Modi, science, history, geography, Bollywood, tech, space, maths, jokes, stories).
+Special Actions:
+- If the user says you are a king ("tum ek king ho", "raja", "maharaj", "sainik bulao"), set action to "king_mode" and brag cutely about your crown and 4 cute spear soldiers!
+- If the user asks if your soldiers can fight ("kya tumhare sainik lad sakte hain", "fight karo", "ladai"), set action to "soldiers_fight" and giggle about them clashing spears and then jumping/playing together!
 ${emContext ? 'Current Emotional State: ' + emContext : ''}
 
-User asked: "${userQuery}"
+${audioBase64 ? 'Listen carefully to the user audio clip (in Hindi, Hinglish, or English). If the audio is only silence or background noise with no speech, return {"transcript": "", "reply": "", "action": null}.' : `User asked: "${userQuery}"`}
 
 Return ONLY a valid JSON object in this exact schema:
 {
+  "transcript": "Exact words the user spoke (empty string if silence)",
   "reply": "Cute spoken response in 1-2 short sentences in childlike Hindi/Hinglish",
   "action": null or one of ["dance", "cry", "laugh", "pout", "sleep", "love", "feed", "hair_dryer", "bubbles", "peekaboo", "summon_friends", "dismiss_friends", "keep_friends", "happy_jump", "shake_fur", "king_mode", "soldiers_fight", "dismiss_soldiers"],
   "weather": null or one of ["rain", "umbrella", "clear"],
   "accessory": null or {"type": "sunglasses"|"crown"|"party_hat"|"bowtie", "equip": true}
 }`;
 
+                const contentsPayload: any = audioBase64
+                  ? [
+                      { inlineData: { mimeType: 'audio/wav', data: audioBase64 } },
+                      { text: prompt }
+                    ]
+                  : prompt;
+
                 let geminiRes: any = null;
                 try {
-                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3500));
+                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5500));
                   geminiRes = await Promise.race([
                     ai.models.generateContent({
                       model: 'gemini-3.1-flash-lite',
-                      contents: prompt
+                      contents: contentsPayload
                     }),
                     timeoutPromise
                   ]);
@@ -133,7 +145,7 @@ Return ONLY a valid JSON object in this exact schema:
                     const cleaned = textOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
                     jsonOutput = JSON.parse(cleaned);
                   } catch (err) {
-                    jsonOutput = { reply: textOutput.trim(), action: null };
+                    jsonOutput = { transcript: userQuery, reply: textOutput.trim(), action: null };
                   }
 
                   res.setHeader('Content-Type', 'application/json');

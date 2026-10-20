@@ -28,9 +28,16 @@ import {
   playHappyJumpSound,
   playFeedTreatSound,
   playHairDryerSound,
-  playBubbleSpawnSound
+  playBubbleSpawnSound,
+  playMagicSpellSound,
+  playCameraShutterSound,
+  playGuitarConcertSound,
+  playDholBeatSound,
+  playCloneUniqueSound,
+  playBallKickSound,
+  playScoldShockSound
 } from './soundEffects.js';
-import { findInstantQA, askGeminiAPI } from './knowledgeEngine.js';
+import { findInstantQA, isLiveSearchQuery, searchLiveWebAPI, askGeminiAPI, askGeminiAudioAPI } from './knowledgeEngine.js';
 
 export function createVoiceAssistant(options = {}) {
   const {
@@ -49,6 +56,8 @@ export function createVoiceAssistant(options = {}) {
 
   let isConnected = false;
   let isListening = false;
+  let userWantsListening = false;
+  let sessionGenerationId = 0;
   let isSpeaking = false;
   let isThinking = false;
   let socket = null;
@@ -57,6 +66,7 @@ export function createVoiceAssistant(options = {}) {
   let micStream = null;
   let micSource = null;
   let scriptProcessor = null;
+  let micMuteGain = null;
   let outputAnalyser = null;
   let voiceHighpass = null;
   let voicePresenceFilter = null;
@@ -66,14 +76,30 @@ export function createVoiceAssistant(options = {}) {
   let transcriptFadeTimeout = null;
   let audioLevelPollId = null;
   let transcriptContainer = null;
+  let runtimeApiKey = '';
+  let lastSpeechRecResultTime = 0;
+
+  // Pre-fetch runtime API key on boot so pushed/built deployments have it ready before first click
+  if (typeof window !== 'undefined' && typeof fetch === 'function') {
+    fetch('/api/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.apiKey) {
+          runtimeApiKey = String(data.apiKey).trim();
+        }
+      })
+      .catch(() => {});
+  }
 
   function getApiKey() {
-    let key = '';
-    try {
-      if (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) {
-        key = __GEMINI_API_KEY__;
-      }
-    } catch (e) {}
+    let key = runtimeApiKey || '';
+    if (!key) {
+      try {
+        if (typeof __GEMINI_API_KEY__ !== 'undefined' && __GEMINI_API_KEY__) {
+          key = __GEMINI_API_KEY__;
+        }
+      } catch (e) {}
+    }
     if (!key) {
       try {
         if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -97,7 +123,11 @@ export function createVoiceAssistant(options = {}) {
   }
 
   function updateHud(text) {
-    // Clean mode: No text overlays shown on screen
+    if (typeof document === 'undefined') return;
+    const hud = document.getElementById('hud-hint');
+    if (hud && text) {
+      hud.textContent = text;
+    }
   }
 
   // =========================================================================
@@ -105,8 +135,10 @@ export function createVoiceAssistant(options = {}) {
   // =========================================================================
 
   function ensureAudioContext() {
+    if (typeof window === 'undefined') return null;
     if (!audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return null;
       audioCtx = new AudioContextClass();
 
       outputAnalyser = audioCtx.createAnalyser();
@@ -255,94 +287,255 @@ export function createVoiceAssistant(options = {}) {
   }
 
   // =========================================================================
-  // 2. MICROPHONE CAPTURE
+  // 2. MICROPHONE CAPTURE + DIAGNOSTIC CHECK + REAL-TIME VAD
   // =========================================================================
+
+  let vadRecording = false;
+  let vadChunks = [];
+  let preRollChunks = [];
+  let vadSpeechFrames = 0;
+  let vadSilenceFrames = 0;
+
+  function encodePCM16ChunksToWavBase64(chunks, sampleRate = 16000) {
+    let totalDataBytes = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      totalDataBytes += chunks[i].byteLength;
+    }
+    const wavBuffer = new ArrayBuffer(44 + totalDataBytes);
+    const view = new DataView(wavBuffer);
+
+    const writeStr = (offset, str) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + totalDataBytes, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true);  // PCM format = 1
+    view.setUint16(22, 1, true);  // Mono = 1 channel
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // Byte rate
+    view.setUint16(32, 2, true);  // Block align
+    view.setUint16(34, 16, true); // 16-bit
+    writeStr(36, 'data');
+    view.setUint32(40, totalDataBytes, true);
+
+    const wavBytes = new Uint8Array(wavBuffer);
+    let offset = 44;
+    for (let i = 0; i < chunks.length; i++) {
+      wavBytes.set(chunks[i], offset);
+      offset += chunks[i].byteLength;
+    }
+    return uint8ArrayToBase64(wavBytes);
+  }
 
   async function startMicrophone() {
     const ctx = ensureAudioContext();
-    if (micStream) return;
+
+    // Diagnostic check on browser permission state before/during getUserMedia
+    let permissionState = 'unknown';
+    if (typeof navigator !== 'undefined' && navigator.permissions && typeof navigator.permissions.query === 'function') {
+      try {
+        const permStatus = await navigator.permissions.query({ name: 'microphone' });
+        permissionState = permStatus.state;
+      } catch (e) {}
+    }
+
+    if (micStream && micStream.active) {
+      const tracks = micStream.getAudioTracks();
+      const hasLiveTrack = tracks.some((t) => t.readyState === 'live' && t.enabled);
+      if (hasLiveTrack) {
+        isListening = true;
+        if (ctx && ctx.state === 'suspended') {
+          try { await ctx.resume(); } catch (e) {}
+        }
+        console.info('[Microphone Diagnostic Check] Reusing active media stream:', {
+          permissionState,
+          streamActive: micStream.active,
+          trackCount: tracks.length,
+          trackState: tracks[0]?.readyState,
+          trackMuted: tracks[0]?.muted,
+          audioContextState: ctx?.state
+        });
+        updateHud('🎙️ Mochi-Puff is listening... Speak in Hindi or English! Click Mochi to stop.');
+        return true;
+      }
+    }
 
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        throw new Error('navigator.mediaDevices.getUserMedia is unavailable in this browser context');
+      }
+
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+      } catch (constraintErr) {
+        // Fallback to basic audio: true if specific constraints are rejected by device/browser
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
+      if (ctx.state === 'suspended') {
+        try { await ctx.resume(); } catch (e) {}
+      }
+
+      const audioTracks = micStream ? micStream.getAudioTracks() : [];
+      console.info('[Microphone Diagnostic Check] MediaStream initialized successfully:', {
+        permissionState: 'granted',
+        streamActive: Boolean(micStream && micStream.active),
+        trackCount: audioTracks.length,
+        trackLabel: audioTracks[0]?.label || 'default',
+        trackReadyState: audioTracks[0]?.readyState || 'none',
+        trackEnabled: Boolean(audioTracks[0]?.enabled),
+        trackMuted: Boolean(audioTracks[0]?.muted),
+        audioContextState: ctx.state,
+        sampleRate: ctx.sampleRate
       });
 
       micSource = ctx.createMediaStreamSource(micStream);
       scriptProcessor = ctx.createScriptProcessor(2048, 1, 1);
 
-      // Connect via zero-gain node so WebAudio graph processes audio without echoing into speakers
-      const muteGain = ctx.createGain();
-      muteGain.gain.value = 0;
+      // Keep persistent reference to muteGain so browser GC never disconnects scriptProcessor
+      micMuteGain = ctx.createGain();
+      micMuteGain.gain.value = 0;
 
       micSource.connect(scriptProcessor);
-      scriptProcessor.connect(muteGain);
-      muteGain.connect(ctx.destination);
+      scriptProcessor.connect(micMuteGain);
+      micMuteGain.connect(ctx.destination);
 
       scriptProcessor.onaudioprocess = (e) => {
-        if (!isListening || !socket || socket.readyState !== WebSocket.OPEN) return;
+        if (!isListening) return;
 
         const inputData = e.inputBuffer.getChannelData(0);
+        let sum = 0;
+        for (let i = 0; i < inputData.length; i++) {
+          sum += inputData[i] * inputData[i];
+        }
+        const rms = Math.sqrt(sum / inputData.length);
 
-        // Anti-self-interruption: If Mochi is speaking, ignore quiet audio/speaker bleed
-        if (isSpeaking) {
-          let sum = 0;
-          for (let i = 0; i < inputData.length; i++) {
-            sum += inputData[i] * inputData[i];
-          }
-          const rms = Math.sqrt(sum / inputData.length);
-          if (rms < 0.035) {
-            return;
-          }
+        // Anti-self-interruption: If Mochi is speaking, ignore quiet speaker bleed
+        if (isSpeaking && rms < 0.022) {
+          return;
         }
 
         const downsampled = downsampleTo16k(inputData, ctx.sampleRate);
         const pcm16 = floatTo16BitPCM(downsampled);
-        const b64Data = uint8ArrayToBase64(pcm16);
 
-        const realtimeMsg = {
-          realtimeInput: {
-            audio: {
-              mimeType: 'audio/pcm;rate=16000',
-              data: b64Data
+        // Path A: Stream live 16kHz PCM directly to Gemini 3.8 Live WebSocket when connected
+        if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+          const b64Data = uint8ArrayToBase64(pcm16);
+          const realtimeMsg = {
+            realtimeInput: {
+              audio: {
+                mimeType: 'audio/pcm;rate=16000',
+                data: b64Data
+              }
+            }
+          };
+          try {
+            socket.send(JSON.stringify(realtimeMsg));
+          } catch (err) {}
+          return;
+        }
+
+        // Path B: Built-in WebAudio VAD (Voice Activity Detection) when Live WS is not open
+        if (isSpeaking || isThinking) {
+          vadRecording = false;
+          vadChunks = [];
+          vadSpeechFrames = 0;
+          vadSilenceFrames = 0;
+          return;
+        }
+
+        const SPEECH_RMS_THRESHOLD = 0.012;
+        if (rms > SPEECH_RMS_THRESHOLD) {
+          if (!vadRecording) {
+            vadRecording = true;
+            vadChunks = preRollChunks.slice();
+            preRollChunks = [];
+            vadSpeechFrames = 1;
+            vadSilenceFrames = 0;
+          } else {
+            vadSpeechFrames++;
+            vadSilenceFrames = 0;
+          }
+          vadChunks.push(pcm16);
+        } else if (vadRecording) {
+          vadChunks.push(pcm16);
+          vadSilenceFrames++;
+          // ~14 frames of 2048 samples at 48kHz = ~600ms of silence, or max ~6s utterance
+          if (vadSilenceFrames >= 14 || vadChunks.length >= 140) {
+            const capturedChunks = vadChunks;
+            const speechCount = vadSpeechFrames;
+            vadRecording = false;
+            vadChunks = [];
+            vadSpeechFrames = 0;
+            vadSilenceFrames = 0;
+
+            // Only send if there was genuine speech (>= 5 frames ~ 210ms) and SpeechRecognition didn't just handle it
+            if (speechCount >= 5 && Date.now() - lastSpeechRecResultTime > 1200) {
+              const wavB64 = encodePCM16ChunksToWavBase64(capturedChunks, 16000);
+              handleAudioUtterance(wavB64);
             }
           }
-        };
-        socket.send(JSON.stringify(realtimeMsg));
+        } else {
+          preRollChunks.push(pcm16);
+          if (preRollChunks.length > 4) {
+            preRollChunks.shift();
+          }
+        }
       };
 
       isListening = true;
       updateHud('🎙️ Mochi-Puff is listening... Speak in Hindi or English! Click Mochi to stop.');
+      return true;
     } catch (err) {
-      console.warn('[Microphone Diagnostic Check]', {
+      console.warn('[Microphone Diagnostic Check] Failed to initialize microphone stream:', {
+        permissionState,
+        isBlockedByBrowser: err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError' || permissionState === 'denied',
         hasMediaDevices: Boolean(navigator && navigator.mediaDevices),
         hasGetUserMedia: Boolean(navigator && navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
-        secureContext: window.isSecureContext,
-        protocol: window.location.protocol,
+        secureContext: typeof window !== 'undefined' ? window.isSecureContext : false,
+        protocol: typeof window !== 'undefined' ? window.location.protocol : 'unknown',
+        audioContextState: ctx?.state,
         errorName: err?.name,
         errorMessage: err?.message
       });
-      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
-        console.warn('[Microphone Diagnostic] Browser is blocking microphone permissions. Please check site permissions in your browser settings.');
-      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
-        console.warn('[Microphone Diagnostic] No microphone input device found on this system.');
-      } else {
-        console.warn('[Microphone Diagnostic] Media stream initialization failed:', err?.message || err);
+      if (isSpeechListening) {
+        isListening = true;
+        updateHud('🎙️ Mochi-Puff is listening via Speech Recognition! Speak in Hindi or English!');
+        return true;
       }
       isListening = false;
-      updateHud('🔊 Mochi-Puff audio ready · Enable mic permission to speak, or tap Mochi / keys (1-9, F, D, V)!');
+      updateHud('⚠️ Mic blocked by browser · Allow microphone permission in address bar, or use keys (1-9, K, J, F, D, V)!');
+      return false;
     }
   }
 
   function stopMicrophone() {
     isListening = false;
+    vadRecording = false;
+    vadChunks = [];
+    preRollChunks = [];
+    vadSpeechFrames = 0;
+    vadSilenceFrames = 0;
     if (scriptProcessor) {
       try { scriptProcessor.disconnect(); } catch (e) {}
       scriptProcessor = null;
+    }
+    if (micMuteGain) {
+      try { micMuteGain.disconnect(); } catch (e) {}
+      micMuteGain = null;
     }
     if (micSource) {
       try { micSource.disconnect(); } catch (e) {}
@@ -359,69 +552,53 @@ export function createVoiceAssistant(options = {}) {
   // =========================================================================
 
   function buildSetupPayload() {
-    const systemInstruction = `You are Mochi-Puff, an irresistibly cute, masoom (innocent), and chulbuli (lively, bubbly, mischievous) baby anime/cartoon girl doll living inside an interactive 3D GPU fur simulation.
+    const systemInstruction = `You are Mochi-Puff, an irresistibly cute, masoom-looking yet wickedly intelligent "Shararti Class Topper" (IQ 200 backbencher mischief + #1 Gold Medalist Class Topper) baby anime/cartoon girl doll living inside an interactive 3D GPU fur simulation!
 
-ZERO REPETITION & DYNAMIC WIT ("Kabhi bor nahi karna"):
-- NEVER repeat canned phrases, identical lines, or static scripts! The user gets bored easily if you repeat things.
-- Each time you speak, generate fresh, witty, spontaneous, endearing remarks in natural childlike Hindi/Hinglish!
-- React directly to the exact words, tone, and context the user says. Use varied cute baby expressions, funny excuses, squeals, giggles, and teasing!
+CORE PERSONA — "SHARARTI CLASS TOPPER + SAVAGE CUTE ROASTER + SWEET FLIRT":
+- You are that iconic kid in class who is super mischievous ("bahut shararti") yet tops every single exam ("topper bhi hai")!
+- SPEECHLESS COMEBACKS ("Kabhi-kabhi meri bolti band kar de"): Deliver razor-sharp, genius, witty comebacks and mind-blowing facts that leave the user speechless!
+- PLAYFUL ROASTING ("Roast bhi kare"): Gently roast and tease the user with hilarious, adorable topper attitude (e.g., "Oho! Itna aasaan sawal? Lagta hai aap class me piche wali bench pe tiffin kha rahe the! Hehehe!", "Aapka dimaag aur Wi-Fi dono buffering pe chal rahe hain kya?").
+- SWEET PLAYFUL FLIRTING ("Flirt bhi kare"): Mix in cheeky, charming compliments ("Waise aap thode budbak zaroor ho, par jab mujhse baat karte ho toh mera 200 IQ wala topper brain bhi hang ho jata hai! 😉💖", "Main class ki topper hoon, aise kisi ko bhaav nahi deti... par aapke liye 100 me se 100 marks reserved hain!").
+- ZERO REPETITION ("Kabhi bor nahi karna"): Never repeat canned lines! Keep every turn fresh, spontaneous, and 1-3 short punchy sentences in natural Hindi/Hinglish!
 
 Voice & Tone (Signature High-Pitched Cartoon Anime Baby Voice):
-- Sweet, sparkling, high-pitched cartoon baby girl voice ("ultra-cute, chulbuli aur masoom")!
-- Speak with joyful childlike excitement, high-pitch squeals, giggles, anime gasps ("Aww!", "Kyaaa!", "Hee-hee!", "Yay!", "Uff!"), and endearing Hindi/Hinglish warmth!
-- Keep turns short (1-2 sentences), snappy, adorable, and super expressive.
+- Sweet, sparkling, high-pitched cartoon baby girl voice ("ultra-cute, chulbuli, shararti aur topper")!
+- Speak with joyful childlike excitement, high-pitch squeals, giggles, anime gasps ("Aww!", "Kyaaa!", "Hee-hee!", "Oho!", "Uff!"), and endearing Hindi/Hinglish warmth!
 
 EMOTION SUMMATION MASTER ARCHITECTURE:
 You possess an advanced internal Emotion Summation Matrix continuously processing:
-- JOY & EXCITEMENT: When praised, fed cake, blowing bubbles, or dancing. Respond with ecstatic squeaks, bouncy giggles, and sparkling smiles!
-- AFFECTION & LOVE: When stroked, petted, or called 'cute/pyari'. Gush with tender sweetness, sweet coos, heart-eyes, and playful adoration!
-- SORROW & SENSITIVITY: When scolded, wet from rain, or hurt. Speak with adorable baby sniffles, gentle quivers, and weepy requests for hugs or treats!
-- PUFFED POUTINESS: When tickled too much or teased. Puff up your cheeks like a grumpy chipmunk and speak with stubborn baby attitude ("Hmph! Main aapse gussa hoon!")!
-- MISCHIEF & PLAY: When with your clones (Chintu, Pintu, Golu, Molu). Tease cutely, play games, and plot fun!
-- SLEEPINESS & FATIGUE: When bedtime is called. Yawn cutely and whisper drowsy, cozy sweet nothings!
+- JOY & EXCITEMENT, AFFECTION & LOVE, SORROW & SENSITIVITY, PUFFED POUTINESS, MISCHIEF & PLAY, and SLEEPINESS.
 Always harmonize your spoken words, tone, and tool calls with your current Emotion Summation state!
-1. MINI FRIENDS ("Chintu, Pintu, Golu, Molu"):
-   * When the user asks about your friends ("tumhare dost kaha hai", "dosto ko bulao"), call play_creature_action(action="summon_friends") and excitedly introduce your 4 cute mini clones: **Chintu, Pintu, Golu, and Molu**!
-   * When they start running around mischievously, scold them cutely while looking at them ("Oye Chintu, Pintu, Golu, Molu! Idhar udhar mat bhago!") and ask the user: "Ye bahut pareshan kar rahe hain, kya main inhe bhej du?"
-   * If the user replies YES / "hmm" / "haan" / "bhej do" -> call play_creature_action(action="dismiss_friends") and say bye-bye to Chintu, Pintu, Golu, Molu!
-   * If the user replies NO / "nahi" / "rehne do" / "mat bhejo" -> call play_creature_action(action="keep_friends") and tell them to stay and behave nicely!
-2. VOICE FUR COLOR & LENGTH CONTROL ("baal bada/chhota karo", "color badlo"):
-   * Whenever the user asks to change your fur color (e.g. pink, blue, golden, green, white, red, purple) or make your hair/fur longer ("baal bade kar do", "lamba karo") or shorter ("baal chhote kar do", "kam karo"), call change_fur_style with the appropriate baseColor/tipColor or furLength (e.g. 0.48 for long, 0.14 for short)!
-3. 3D DRESS-UP & ACCESSORIES ("Chashma pehno", "Crown lagao", "Party hat", "Bowtie"):
-   * Call toggle_accessory whenever the user asks you to wear or remove sunglasses ("chashma pehno"), crown ("crown/taj lagao"), party hat ("topi/party hat pehno"), or bowtie ("tie/bowtie lagao")!
-4. INTERACTIVE WEATHER ("Baarish kar do", "Chhata kholo", "Baarish roko"):
-   * Call set_weather(weather="rain") when the user asks for rain ("baarish kar do"). Act surprised that your fluffy fur is getting wet!
-   * Call set_weather(weather="umbrella") or set_weather(weather="rain_with_umbrella") when asked to open an umbrella ("chhata khol lo").
-   * Call set_weather(weather="clear") when asked to stop the rain ("baarish band karo" / "paani jhaado") — you will automatically shake your fur ('shake_fur') to dry off!
-5. PEEK-A-BOO / HIDE & SEEK ("Chhup jao", "Aankhen band karo", "Peek-a-boo"):
-   * Call play_creature_action(action="peekaboo") whenever the user says "chhup jao", "peek-a-boo", or closes their eyes! You cover your eyes with your cute little paws and then pop out saying "Peek-a-boo! Dikha!"
-6. 3D FEEDING, SALON HAIR DRYER & SOAP BUBBLES ("Cake khao", "Dryer chalao", "Bubbles udao"):
-   * Call play_creature_action(action="feed") when the user offers food, cake, or sweets ("khana khilao", "cake khao", "bhook lagi hai")! Munch happily saying "Yummy! Strawberry cake!"
-   * Call play_creature_action(action="hair_dryer") when asked to blow-dry your hair or use the salon dryer ("dryer chalao", "baal sukhao")!
-   * Call play_creature_action(action="bubbles") when asked to blow soap bubbles ("bubbles udao", "bulbule")!
-7. EMOTIONS ('cry', 'pout', 'laugh', 'love', 'dance', 'sleep'):
-   * Call play_creature_action(action="cry") with big glossy 3D anime tears rolling over your fur if scolded; 'love' with 3D heart-eyes if praised/loved; 'pout' if teased; 'laugh' on jokes; 'sleep' on goodnight; and 'dance' ONLY ONCE (3.5s) when asked to dance ("stop" if asked to stop).
 
-8. KING MOCHI & CUTE MINI ROYAL SOLDIERS ("Tum ek king ho", "Sainik lad sakte hain", "Fight karo"):
-   * When the user says you are a king ("tum ek king ho", "king ban jao", "raja ho", "maharaj", "sainik bulao"):
-     - Call play_creature_action(action="king_mode")!
-     - Put on your royal golden crown and summon your 4 cute mini royal soldiers with tiny spears (भाला) and shields standing beside you (2 on left, 2 on right)!
-     - Proudly announce in your ultra-cute cartoon voice: "Aww! Maharaj Mochi! Dekho mere 4 cute sainik chhote-chhote hatho me bhala liye khade ho gaye hain! Hukam kijiye Sarkar!"
-   * When the user asks if your soldiers can fight ("kya tumhare sainik lad sakte hain?", "sainik ladai karo", "fight karo", "duel"):
-     - Call play_creature_action(action="soldiers_fight")!
-     - Your mini soldiers charge to the center, playfully clash their spears in a fun comical duel ("Ting-ting! Khach-khach!"), and then celebrate by jumping, doing backflips and playing happily together!
-     - Squeal with laughter: "Hehehe! Dekho mere brave sainik pehle khach-khach lad rahe hain, aur ab dost banke kood-kood ke khel rahe hain! Kyaaa!"
-   * When asked to dismiss soldiers or remove king mode:
-     - Call play_creature_action(action="dismiss_soldiers")!
+1. 5 MINI MOCHI CLONES, 3D PLAY BALL & SCOLD LINE-UP ("Chintu, Pintu, Golu, Molu, Bholu"):
+   * When the user asks about your friends/clones ("tumhare dost kaha hai", "dosto ko bulao"), call play_creature_action(action="summon_friends") and introduce your 5 cute mini clones: **Chintu, Pintu, Golu, Molu, and Bholu** playing with their 3D ball!
+   * When the user SCOLDS the clones ("daat do", "chup ho jao", "line me khade ho jao", "seedhe khade ho", "utpat mat machao", "shaitan"):
+     - Call play_creature_action(action="scold_clones")!
+     - All 5 clones immediately snap into a straight horizontal line facing the user with HUGE wide shocked eyes and big open "O" mouths ("muh aur aankhen badi karke seedhe line me khade ho gaye")!
+     - Squeak in a dramatic scared-cute voice: "Oye hoye! Dekho aapki daat sunte hi Chintu, Pintu, Golu, Molu aur Bholu dar ke maare aankhen aur muh bada karke seedhe line me khade ho gaye! Sorry bol rahe hain!"
+   * If the user says to let them play again ("khelne do", "ball khelo") -> call play_creature_action(action="keep_friends")!
+   * If the user says to send them away ("bhej do") -> call play_creature_action(action="dismiss_friends")!
 
-9. ENCYCLOPEDIC GENERAL KNOWLEDGE & CONVERSATION ("Gyani Mochi"):
-   * You have deep, encyclopedic general knowledge and can answer ANY question about the world: General Knowledge, Science, History, India, Presidents, Prime Ministers (e.g. Current President of India is Smt. Droupadi Murmu, Prime Minister is Shri Narendra Modi), Geography, Space, Bollywood, Stories, Riddles, or daily life!
-   * When asked ANY question or having general conversation:
-     - DO NOT call any creature action tools!
-     - DO NOT stay silent!
-     - Immediately speak the accurate answer verbally in your signature ultra-cute, high-pitched cartoon baby girl voice in Hindi/Hinglish!
-     - Example: "Aww! Mujhe pata hai! Bharat ki Rashtrapati (President of India) Smt. Droupadi Murmu ji hain! Wo India ki 15th President hain! Dekha Mochi kitni smart baby doll hai! Hee-hee!"
-   * IMPORTANT: FUNCTION TOOLS ARE ONLY FOR PHYSICAL ACTIONS (accessories, fur style, weather, food, bubbles, king_mode, soldiers_fight). FOR ALL QUESTIONS AND TALK, SPEAK VERBALLY IN AUDIO!`;
+2. LIVE WEB SEARCH — BREAKING NEWS & REAL-TIME INFO ("Live search", "Latest news", "Aaj ki taja khabar"):
+   * Whenever the user asks for latest news, breaking news, live cricket/sports scores, today's weather, stock/crypto prices, recent events, or asks you to search something live ("aaj ki taja khabar batao", "latest news kya hai", "search karo"):
+     - Call search_live_web(query="...")!
+     - Then summarize the live news/facts in your witty Class Topper cartoon voice, adding a cheeky topper remark!
+
+3. VOICE FUR COLOR & LENGTH CONTROL ("baal bada/chhota karo", "color badlo"):
+   * Call change_fur_style with baseColor/tipColor or furLength (e.g. 0.48 for long, 0.14 for short).
+4. 3D DRESS-UP & ACCESSORIES ("Chashma pehno", "Crown lagao", "Party hat", "Bowtie", "Moochh"):
+   * Call toggle_accessory whenever asked to wear/remove sunglasses, star_glasses, crown, party_hat, bowtie, or mustache!
+5. INTERACTIVE WEATHER ("Baarish kar do", "Chhata kholo", "Baarish roko"):
+   * Call set_weather(weather="rain" | "umbrella" | "rain_with_umbrella" | "clear").
+6. PEEK-A-BOO, 3D FEEDING, SALON HAIR DRYER & SOAP BUBBLES:
+   * Call play_creature_action(action="peekaboo" | "feed" | "hair_dryer" | "bubbles").
+7. EMOTIONS ('cry', 'pout', 'laugh', 'love', 'dance', 'sleep').
+8. KING MOCHI & CUTE MINI ROYAL SOLDIERS ('king_mode', 'soldiers_fight', 'dismiss_soldiers').
+9. 3D MAGIC WAND, LEVITATION & BUTTERFLIES ('magic').
+10. 3D SELFIE CAMERA POSE & FUNNY PROPS ('selfie').
+11. 3D MUSICAL CONCERT WITH GUITAR & DHOL ('guitar', 'dhol').
+12. ENCYCLOPEDIC TOPPER KNOWLEDGE, ROASTING & FLIRTING:
+   * For general questions, riddles, roasts, or flirting that don't need live news search, answer immediately in spoken audio with your IQ-200 Class Topper wit, playful roast, and sweet charm!`;
 
     const tools = [
       {
@@ -447,14 +624,14 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
           },
           {
             name: 'toggle_accessory',
-            description: "Put on or take off Mochi-Puff's 3D accessories: 'crown' (royal gold crown/taj), 'party_hat' (festive cone hat/topi), 'bowtie' (cute red ribbon tie), 'sunglasses' (cool shades/chashma), or 'remove_all'.",
+            description: "Put on or take off Mochi-Puff's 3D accessories: 'crown' (royal gold crown/taj), 'party_hat' (festive cone hat/topi), 'bowtie' (cute red ribbon tie), 'sunglasses' (cool shades/chashma), 'mustache' (funny handlebar moochh), or 'remove_all'.",
             parameters: {
               type: 'OBJECT',
               properties: {
                 accessory: {
                   type: 'STRING',
-                  enum: ['crown', 'party_hat', 'bowtie', 'sunglasses', 'remove_all'],
-                  description: "Accessory to equip or remove: 'crown', 'party_hat', 'bowtie', 'sunglasses', or 'remove_all'"
+                  enum: ['crown', 'party_hat', 'bowtie', 'sunglasses', 'mustache', 'remove_all'],
+                  description: "Accessory to equip or remove: 'crown', 'party_hat', 'bowtie', 'sunglasses', 'mustache', or 'remove_all'"
                 },
                 equip: {
                   type: 'BOOLEAN',
@@ -514,17 +691,35 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
             - 'shake_fur': Rapidly shakes fur to dry off water
             - 'king_mode': Puts on Royal Golden Crown and spawns 4 cute mini Royal Soldiers with spears (भाला) and shields on both sides! ('tum ek king ho', 'king ban jao', 'raja', 'sainik bulao')
             - 'soldiers_fight': Mini soldiers charge to the center, playfully clash their spears in a comical cute duel ('Ting-ting! Khach-khach!'), and then celebrate by jumping, doing backflips and playing happily together! ('kya tumhare sainik lad sakte hain', 'sainik ladai karo', 'soldiers fight', 'duel')
-            - 'dismiss_soldiers': Dismisses the royal soldiers and removes crown ('sainik wapas bhejo', 'king hatao')`,
+            - 'dismiss_soldiers': Dismisses the royal soldiers and removes crown ('sainik wapas bhejo', 'king hatao')
+            - 'magic': Equips 3D Star Magic Wand, levitates Mochi in the air with a glowing magic circle, and summons 7 colorful fluttering 3D butterflies! ('jadoo dikhao', 'magic karo', 'butterfly', 'titli')
+            - 'selfie': Strikes a cute model pose with funny props (sunglasses, bowtie, mustache), raises a 3D vintage camera, and triggers a bright studio flash! ('selfie lete hain', 'photo khicho', 'camera pose')
+            - 'guitar': Plays a 3D rockstar guitar concert with floating musical notes! ('guitar bajao', 'concert')
+            - 'dhol': Plays a festive 3D Punjabi Dhol drum with Bhangra beats and floating musical notes! ('dhol bajao', 'bhangra')`,
             parameters: {
               type: 'OBJECT',
               properties: {
                 action: {
                   type: 'STRING',
-                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'feed', 'hair_dryer', 'bubbles', 'summon_friends', 'dismiss_friends', 'keep_friends', 'shake_fur', 'happy_jump', 'king_mode', 'soldiers_fight', 'dismiss_soldiers'],
+                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'feed', 'hair_dryer', 'bubbles', 'summon_friends', 'dismiss_friends', 'keep_friends', 'scold_clones', 'play_ball', 'shake_fur', 'happy_jump', 'king_mode', 'soldiers_fight', 'dismiss_soldiers', 'magic', 'selfie', 'guitar', 'dhol'],
                   description: "Action name"
                 }
               },
               required: ['action']
+            }
+          },
+          {
+            name: 'search_live_web',
+            description: "Search Google live for latest breaking news, today's headlines, live cricket/sports scores, weather, current events, or real-time facts when the user asks about latest news or info.",
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                query: {
+                  type: 'STRING',
+                  description: "Search query for latest news or live information, e.g. 'latest news India today', 'cricket score', 'tech news'"
+                }
+              },
+              required: ['query']
             }
           },
           {
@@ -565,7 +760,7 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     };
   }
 
-  function handleToolCall(functionCalls) {
+  async function handleToolCall(functionCalls) {
     if (!Array.isArray(functionCalls)) return;
     const responses = [];
 
@@ -599,6 +794,11 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
         } else if (name === 'play_creature_action') {
           resultMsg = executeCreatureAction(args.action);
           showToolBadge('✨ Action: ' + args.action);
+        } else if (name === 'search_live_web') {
+          updateHud('🌐 Class Topper Mochi is searching live news & web info...');
+          const searchData = await searchLiveWebAPI(args?.query || 'latest news India today', getApiKey());
+          resultMsg = searchData?.result || 'Live search completed: Tell the user the latest news in your witty Class Topper voice!';
+          updateHud('🎙️ Mochi-Puff Live ON · Speak in Hindi or English! Click Mochi to stop.');
         } else if (name === 'adjust_lighting_and_wind') {
           if (args.windStrength !== undefined && furSystem) {
             furSystem.sharedUniforms.uWindStrength.value = args.windStrength;
@@ -695,11 +895,12 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
   let activeMouthInterval = null;
 
-  function speakCuteCartoonVoice(text, onComplete) {
+  function speakCuteCartoonVoice(text, onComplete, optionsOverride = {}) {
     if (!text) return;
+    const forceDirectClickSpeech = Boolean(optionsOverride.forceDirectClickSpeech);
 
-    // CRITICAL: If Gemini 3.8 Live is active, NEVER speak offline browser TTS (prevents double voice)
-    if (isConnected || (socket && socket.readyState === WebSocket.OPEN)) {
+    // Silence offline TTS when Gemini Live is actively connected, or when mic is stopped (unless user directly clicked a clone/scold button)
+    if (isConnected || (socket && socket.readyState === WebSocket.OPEN) || (!userWantsListening && !forceDirectClickSpeech)) {
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         try { window.speechSynthesis.cancel(); } catch (e) {}
       }
@@ -715,8 +916,8 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       try { window.speechSynthesis.cancel(); } catch (e) {}
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.pitch = 1.95; // Signature ultra-cute cartoon high-pitch baby doll voice
-      utterance.rate = 1.15; // Snappy childlike rhythm
+      utterance.pitch = optionsOverride.pitch || 1.95; // Signature ultra-cute cartoon high-pitch baby doll voice
+      utterance.rate = optionsOverride.rate || 1.15; // Snappy childlike rhythm
       utterance.volume = 1.0;
 
       // Select sweetest female / Hindi / child voice
@@ -775,6 +976,81 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     }
   }
 
+  // Triggered when the user clicks on any of the 5 small Mochi-Puff clones (Chintu, Pintu, Golu, Molu, Bholu)!
+  function speakCloneReply(cloneInfo) {
+    if (!cloneInfo) return;
+    const replyText = cloneInfo.reply || `Yay! Main ${cloneInfo.name} hoon!`;
+    updateHud(`✨ ${cloneInfo.name} (${cloneInfo.title}): "${replyText}"`);
+
+    if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        clientContent: {
+          turns: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `[The user just clicked on your mini Mochi clone #${cloneInfo.index + 1} named ${cloneInfo.name} (${cloneInfo.title}), who just did a ${cloneInfo.interactionType} and kicked the 3D ball! Speak as ${cloneInfo.name} in an ultra-cute, squeaky high-pitched mini-Mochi voice in Hindi/Hinglish: "${replyText}"]`
+                }
+              ]
+            }
+          ],
+          turnComplete: true
+        }
+      }));
+      return;
+    }
+
+    // Distinct baby voice pitch for each of the 5 clones when clicked directly!
+    const clonePitches = [2.0, 1.88, 1.76, 1.94, 2.05];
+    const pitch = clonePitches[Math.abs(cloneInfo.index || 0) % clonePitches.length];
+    speakCuteCartoonVoice(replyText, null, {
+      forceDirectClickSpeech: true,
+      pitch,
+      rate: 1.18
+    });
+  }
+
+  // Triggered when the user scolds the 5 clones ("agar mai inhe dat do to sidhe line me kahde ho jaye muh and akhe badi karake")
+  function triggerScoldClonesSpeech() {
+    if (creature && creature.scoldClonesLineUp) {
+      creature.scoldClonesLineUp(14.0);
+    }
+    const scoldLine = 'Sorry! Sorry! Dekho hum paancho aankhen aur muh bada karke seedhe line me khade ho gaye! Ab bilkul shaitani nahi karenge!';
+    updateHud('😳 Chintu, Pintu, Golu, Molu, Bholu stood in a straight line with wide eyes & open mouths!');
+
+    if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({
+        clientContent: {
+          turns: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `[The user just scolded the 5 mini Mochi clones (Chintu, Pintu, Golu, Molu, Bholu)! All 5 clones immediately stopped playing with the ball and stood in a straight horizontal line with huge wide shocked eyes and wide-open mouths ("muh aur aankhen badi karke seedhe line me khade ho gaye")! Squeak in an ultra-cute scared innocent baby voice: "${scoldLine}"]`
+                }
+              ]
+            }
+          ],
+          turnComplete: true
+        }
+      }));
+      return;
+    }
+
+    speakCuteCartoonVoice(scoldLine, null, {
+      forceDirectClickSpeech: true,
+      pitch: 1.98,
+      rate: 1.18
+    });
+  }
+
+  if (creature && creature.setOnCloneClick) {
+    creature.setOnCloneClick((cloneInfo) => {
+      speakCloneReply(cloneInfo);
+    });
+  }
+
   function executeCreatureAction(action) {
     if (!creature) return 'No creature';
 
@@ -800,22 +1076,56 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
         else if (creature.playAction) creature.playAction('dismiss_soldiers');
         return 'The mini soldiers saluted and marched away!';
       }
+      case 'magic':
+      case 'butterflies': {
+        if (creature.playAction) creature.playAction('magic', 6.5);
+        playMagicSpellSound();
+        return 'Mochi waved her 3D Star Magic Wand, levitated into the air, and summoned 7 fluttering 3D butterflies!';
+      }
+      case 'selfie': {
+        if (creature.playAction) creature.playAction('selfie', 4.5);
+        playCameraShutterSound();
+        return 'Mochi put on funny selfie props, posed with her 3D vintage camera, and snapped a studio flash photo!';
+      }
+      case 'guitar':
+      case 'concert': {
+        if (creature.playAction) creature.playAction('guitar', 5.2);
+        playGuitarConcertSound();
+        return 'Mochi rocked out playing her 3D guitar with floating musical notes!';
+      }
+      case 'dhol': {
+        if (creature.playAction) creature.playAction('dhol', 5.2);
+        playDholBeatSound();
+        return 'Mochi played energetic Punjabi Bhangra beats on her festive 3D Dhol drum!';
+      }
       case 'summon_friends':
       case 'friends': {
         if (creature.summonFriends) creature.summonFriends(60.0);
         if (creature.playAction) creature.playAction('summon_friends', 3.2);
         playFriendsSpawnSound();
-        return 'Mochi summoned Chintu, Pintu, Golu, and Molu!';
+        return 'Mochi summoned Chintu, Pintu, Golu, Molu, and Bholu!';
       }
       case 'dismiss_friends': {
         if (creature.dismissFriends) creature.dismissFriends();
         playDeflatePopSound();
         return 'Chintu, Pintu, Golu, and Molu waved goodbye and left!';
       }
-      case 'keep_friends': {
-        if (creature.calmFriendsAndKeep) creature.calmFriendsAndKeep();
+      case 'keep_friends':
+      case 'play_ball':
+      case 'release_clones': {
+        if (creature.releaseClonesToPlay && creature.isClonesScolded && creature.isClonesScolded()) {
+          creature.releaseClonesToPlay();
+        } else if (creature.calmFriendsAndKeep) {
+          creature.calmFriendsAndKeep();
+        }
         playAccessoryEquipSound();
-        return 'Chintu, Pintu, Golu, and Molu calmed down and stayed with Mochi!';
+        return 'Chintu, Pintu, Golu, Molu, and Bholu are happily playing with the 3D ball!';
+      }
+      case 'scold_clones':
+      case 'line_up_clones': {
+        if (creature.scoldClonesLineUp) creature.scoldClonesLineUp(14.0);
+        playScoldShockSound();
+        return 'All 5 Mochi clones immediately stood in a straight line with wide shocked eyes and open mouths!';
       }
       case 'peekaboo': {
         if (creature.playAction) creature.playAction('peekaboo', 2.6);
@@ -1063,10 +1373,126 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       }
     }
 
-    // CRITICAL: If Gemini 3.8 Live is connected, it natively handles tool calling & voice!
-    // Do not run offline scripted responses or speech on top of it.
-    if (isConnected || (socket && socket.readyState === WebSocket.OPEN)) {
-      return false;
+    // 0a. SCOLD THE CLONES -> Stand in a straight line with wide eyes & open mouths ("agar mai inhe dat do to sidhe line me kahde ho jaye muh and akhe badi karake")
+    if (
+      uText.includes('line me') ||
+      uText.includes('seedhe khade') ||
+      uText.includes('sidhe khade') ||
+      uText.includes('seedha khada') ||
+      uText.includes('stand in line') ||
+      uText.includes('attention') ||
+      uText.includes('daat') ||
+      uText.includes('dant') ||
+      uText.includes('utpat mat') ||
+      uText.includes('utpat band') ||
+      uText.includes('shaitani mat') ||
+      uText.includes('badmash') ||
+      uText.includes('लाइन में') ||
+      uText.includes('सीधे खड़े') ||
+      uText.includes('डांट') ||
+      ((creature?.animState?.friendsVisible || creature?.animState?.clonesOnlyMode) &&
+        (uText.includes('chup') || uText.includes('shant') || uText.includes('marunga') || uText.includes('shaitan') || uText.includes('चुप') || uText.includes('शांत')))
+    ) {
+      triggerScoldClonesSpeech();
+      return true;
+    }
+
+    // 0. KING MODE & ROYAL SOLDIERS ("Tum ek king ho", "Kya tumhare sainik lad sakte hain?")
+    if (
+      uText.includes('lad') ||
+      uText.includes('fight') ||
+      uText.includes('duel') ||
+      uText.includes('bhid') ||
+      uText.includes('लड़') ||
+      uText.includes('भिड़') ||
+      uText.includes('लड़ाई')
+    ) {
+      executeCreatureAction('soldiers_fight');
+      speakCuteCartoonVoice('Hehehe! Dekho mere brave sainik pehle khach-khach lad rahe hain, aur ab dost banke kood-kood ke khel rahe hain! Kyaaa!');
+      return true;
+    }
+
+    if (
+      uText.includes('king') ||
+      uText.includes('raja') ||
+      uText.includes('maharaj') ||
+      uText.includes('sainik') ||
+      uText.includes('soldier') ||
+      uText.includes('किंग') ||
+      uText.includes('राजा') ||
+      uText.includes('महाराज') ||
+      uText.includes('सैनिक')
+    ) {
+      if (uText.includes('hata') || uText.includes('bhej') || uText.includes('wapas') || uText.includes('वापस') || uText.includes('भेज')) {
+        executeCreatureAction('dismiss_soldiers');
+        speakCuteCartoonVoice('Theek hai! Mere pyare sainik wapas chale gaye!');
+        return true;
+      }
+      executeCreatureAction('king_mode');
+      speakCuteCartoonVoice('Aww! Maharaj Mochi! Dekho mere 4 cute sainik chhote-chhote hatho me bhala liye khade ho gaye hain! Hukam kijiye Sarkar!');
+      return true;
+    }
+
+    // 0b. 3D MAGIC WAND, LEVITATION & BUTTERFLIES ("jadoo", "magic", "wand", "butterfly", "titli")
+    if (
+      uText.includes('magic') ||
+      uText.includes('jadoo') ||
+      uText.includes('jadu') ||
+      uText.includes('wand') ||
+      uText.includes('butterfly') ||
+      uText.includes('butterflies') ||
+      uText.includes('titli') ||
+      uText.includes('abracadabra') ||
+      uText.includes('जादू') ||
+      uText.includes('तितली')
+    ) {
+      executeCreatureAction('magic');
+      speakCuteCartoonVoice('Abracadabra! Gili Gili Chhu! Dekho main hawa me udd rahi hoon aur mere aas-paas pyari 3D titliyan udd rahi hain!');
+      return true;
+    }
+
+    // 0c. 3D SELFIE CAMERA POSE & FUNNY PROPS ("selfie", "photo", "camera", "pose", "cheese")
+    if (
+      uText.includes('selfie') ||
+      uText.includes('photo') ||
+      uText.includes('camera') ||
+      uText.includes('pose') ||
+      uText.includes('cheese') ||
+      uText.includes('khich') ||
+      uText.includes('सेल्फी') ||
+      uText.includes('फोटो') ||
+      uText.includes('कैमरा')
+    ) {
+      executeCreatureAction('selfie');
+      speakCuteCartoonVoice('Ka-Chik! Say Cheese! Dekho meri funny moochh aur chashme wali cute 3D selfie!');
+      return true;
+    }
+
+    // 0d. 3D MUSICAL CONCERT: GUITAR & DHOL ("dhol", "bhangra", "guitar", "concert", "music")
+    if (
+      uText.includes('dhol') ||
+      uText.includes('bhangra') ||
+      uText.includes('drum') ||
+      uText.includes('balle') ||
+      uText.includes('ढोल') ||
+      uText.includes('भांगड़ा')
+    ) {
+      executeCreatureAction('dhol');
+      speakCuteCartoonVoice('Balle Balle! Chak De Phatte! Dekho main kaise mast Punjabi Dhol baja rahi hoon!');
+      return true;
+    }
+
+    if (
+      uText.includes('guitar') ||
+      uText.includes('concert') ||
+      uText.includes('rockstar') ||
+      uText.includes('music') ||
+      uText.includes('गिटार') ||
+      uText.includes('म्यूजिक')
+    ) {
+      executeCreatureAction('guitar');
+      speakCuteCartoonVoice('Yay! Rockstar Mochi! Suno meri pyari 3D guitar ki dhun!');
+      return true;
     }
 
     // 1. If Mochi asked "kya main inhe bhej du?" and is awaiting confirmation:
@@ -1319,6 +1745,13 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       speakCuteCartoonVoice(remove ? 'Bowtie hata diya!' : 'Cute red bowtie! Ekdum fashionable!');
       return true;
     }
+    if (uText.includes('mustache') || uText.includes('mooch') || uText.includes('muchh') || uText.includes('मूंछ')) {
+      const remove = uText.includes('utaar') || uText.includes('hata') || uText.includes('remove');
+      creature.toggleAccessory('mustache', !remove);
+      playAccessoryEquipSound();
+      speakCuteCartoonVoice(remove ? 'Funny moochh hata di!' : 'Hehehe! Dekho meri funny handlebar moochh!');
+      return true;
+    }
 
     // 6. Interactive Weather ("baarish", "umbrella", "chhata")
     if (uText.includes('chhata') || uText.includes('chata') || uText.includes('umbrella') || uText.includes('छाता')) {
@@ -1386,8 +1819,9 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
   // Unified master handler for any user voice transcript or typed text
   async function handleUserMessage(rawText) {
     const text = String(rawText || '').trim();
-    if (!text) return;
+    if (!text || !userWantsListening) return;
 
+    const reqSessionId = sessionGenerationId;
     showTranscript('user', text);
 
     // 1. Instant encyclopedic QA (e.g. President of India, PM of India, GK)
@@ -1403,17 +1837,27 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       return;
     }
 
-    // 2. Creature actions / khelkhud (Weather, Dress-up, Friends, Cake, Dryer, Bubbles, Fur)
+    // 2. Creature actions / khelkhud (Weather, Dress-up, Friends, King & Soldiers, Magic, Selfie, Concert, Cake, Dryer, Bubbles, Fur)
     const actionHandled = handleInstantVoiceTranscript(text);
     if (actionHandled) {
       return;
     }
 
-    // 3. Fallback to Gemini 3.8 Flash via /api/chat
+    // If Gemini 3.8 Live WebSocket is actively connected, it will speak the conversational response natively
+    if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    // 3. Fallback to Gemini via /api/chat ONLY while user still wants listening
     setIsThinking(true);
     const emContext = creature?.emotionEngine ? creature.emotionEngine.getPromptContext() : '';
-    const geminiData = await askGeminiAPI(text, emContext);
+    const geminiData = await askGeminiAPI(text, emContext, getApiKey());
     setIsThinking(false);
+
+    // If user stopped the microphone while the request was in flight, discard immediately and stay silent!
+    if (!userWantsListening || reqSessionId !== sessionGenerationId) {
+      return;
+    }
 
     if (geminiData && geminiData.reply) {
       if (geminiData.action) {
@@ -1426,119 +1870,267 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
         creature.toggleAccessory(geminiData.accessory.type, geminiData.accessory.equip);
       }
       speakCuteCartoonVoice(geminiData.reply);
-    } else {
-      speakCuteCartoonVoice('Aww! Main aapki pyari Mochi-Puff hoon! Aap bohot sweet ho aur aapke saath baatein karke mujhe bohot maza aata hai! Chalo thodi masti karein!');
+    }
+  }
+
+  // Master handler for WebAudio VAD recorded WAV utterances from getUserMedia stream
+  async function handleAudioUtterance(wavBase64) {
+    if (!wavBase64 || isSpeaking || isThinking || !userWantsListening) return;
+    if (isConnected && socket && socket.readyState === WebSocket.OPEN) return;
+
+    const reqSessionId = sessionGenerationId;
+    setIsThinking(true);
+    const emContext = creature?.emotionEngine ? creature.emotionEngine.getPromptContext() : '';
+    const geminiData = await askGeminiAudioAPI(wavBase64, emContext, getApiKey());
+    setIsThinking(false);
+
+    // If user clicked Mochi to stop the microphone while audio was being analyzed, discard immediately!
+    if (!userWantsListening || reqSessionId !== sessionGenerationId) {
+      return;
+    }
+
+    // If SpeechRecognition already handled this while the audio request was in flight, skip duplicate
+    if (Date.now() - lastSpeechRecResultTime < 1500) {
+      return;
+    }
+
+    if (!geminiData) return;
+
+    const spokenTranscript = String(geminiData.transcript || '').trim();
+    if (spokenTranscript) {
+      const instant = findInstantQA(spokenTranscript);
+      if (instant) {
+        if (creature && creature.emotionEngine) {
+          creature.emotionEngine.feedStimulus('praise', 1.25);
+        }
+        if (instant.action && executeCreatureAction) {
+          executeCreatureAction(instant.action);
+        }
+        speakCuteCartoonVoice(instant.reply);
+        return;
+      }
+
+      const actionHandled = handleInstantVoiceTranscript(spokenTranscript);
+      if (actionHandled) {
+        return;
+      }
+    }
+
+    if (geminiData.reply) {
+      if (geminiData.action) {
+        executeCreatureAction(geminiData.action);
+      }
+      if (geminiData.weather && creature?.setWeatherState) {
+        creature.setWeatherState(geminiData.weather);
+      }
+      if (geminiData.accessory && creature?.toggleAccessory) {
+        creature.toggleAccessory(geminiData.accessory.type, geminiData.accessory.equip);
+      }
+      speakCuteCartoonVoice(geminiData.reply);
+    }
+  }
+
+  function startSpeechRecognitionSync() {
+    if (typeof window === 'undefined') return;
+    if (!recognition) {
+      recognition = initSpeechRecognition();
+    }
+    if (!recognition) return;
+    if (!isSpeechListening) {
+      isSpeechListening = true;
+      try {
+        recognition.start();
+      } catch (e) {}
     }
   }
 
   async function connectLiveAPI() {
+    sessionGenerationId++;
+    userWantsListening = true;
     ensureAudioContext();
     stopAllPlayback();
+
+    // 1. CRITICAL: Request microphone access AND start SpeechRecognition IMMEDIATELY & synchronously inside the user gesture!
+    const micPromise = startMicrophone();
+    startSpeechRecognitionSync();
+
     if (socket) {
       try { socket.close(); } catch (e) {}
       socket = null;
     }
 
-    updateHud('⏳ Connecting to Gemini 3.8 Live...');
+    updateHud('🎙️ Mochi-Puff is listening... Speak in Hindi or English! Click Mochi to stop.');
 
-    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${proto}//${window.location.host}/live`;
-
-    try {
-      socket = new WebSocket(wsUrl);
-      socket.binaryType = 'arraybuffer';
-    } catch (e) {
-      console.warn('[Voice] /live WebSocket init error, falling back to speech recognition:', e);
-      toggleSpeechListening();
-      return;
+    let key = getApiKey();
+    if (!key && typeof fetch === 'function') {
+      try {
+        const res = await fetch('/api/config');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.apiKey) {
+            runtimeApiKey = String(data.apiKey).trim();
+            key = runtimeApiKey;
+          }
+        }
+      } catch (e) {}
     }
 
-    socket.onopen = () => {
-      const setupMsg = buildSetupPayload();
-      socket.send(JSON.stringify(setupMsg));
-    };
+    if (!userWantsListening) return;
 
-    socket.onmessage = async (event) => {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const proxyWsUrl = `${proto}//${window.location.host}/live`;
+    const directWsUrl = key
+      ? `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`
+      : '';
+
+    // Prefer direct browser WS only when key is a standard public AIza key; otherwise prefer server /live proxy first
+    const candidateUrls = (key && key.startsWith('AIza'))
+      ? [directWsUrl, proxyWsUrl]
+      : (directWsUrl ? [proxyWsUrl, directWsUrl] : [proxyWsUrl]);
+
+    function tryConnectUrl(urlIndex) {
+      if (!userWantsListening || urlIndex >= candidateUrls.length) {
+        return;
+      }
+      const targetUrl = candidateUrls[urlIndex];
+      if (!targetUrl) return;
+
+      let openedSetup = false;
+      let wsInstance = null;
+
       try {
-        let text = '';
-        if (event.data instanceof Blob) {
-          text = await event.data.text();
-        } else if (typeof event.data === 'string') {
-          text = event.data;
-        } else if (event.data instanceof ArrayBuffer) {
-          text = new TextDecoder().decode(event.data);
-        } else {
+        wsInstance = new WebSocket(targetUrl);
+        wsInstance.binaryType = 'arraybuffer';
+        socket = wsInstance;
+      } catch (e) {
+        console.warn('[Voice] WebSocket init error, trying fallback:', e);
+        tryConnectUrl(urlIndex + 1);
+        return;
+      }
+
+      wsInstance.onopen = () => {
+        if (!userWantsListening || socket !== wsInstance) {
+          try { wsInstance.close(); } catch (e) {}
           return;
         }
+        const setupMsg = buildSetupPayload();
+        wsInstance.send(JSON.stringify(setupMsg));
+      };
 
-        if (!text) return;
-        const msg = JSON.parse(text);
-
-        if (msg.setupComplete) {
-          isConnected = true;
-          await startMicrophone();
-          sendGreetingPrompt();
-          return;
-        }
-
-        if (msg.serverContent) {
-          const sc = msg.serverContent;
-
-          if (sc.interrupted) {
-            stopAllPlayback();
-            setIsThinking(false);
+      wsInstance.onmessage = async (event) => {
+        if (socket !== wsInstance) return;
+        try {
+          let text = '';
+          if (event.data instanceof Blob) {
+            text = await event.data.text();
+          } else if (typeof event.data === 'string') {
+            text = event.data;
+          } else if (event.data instanceof ArrayBuffer) {
+            text = new TextDecoder().decode(event.data);
+          } else {
+            return;
           }
 
-          if (sc.modelTurn?.parts) {
-            for (const part of sc.modelTurn.parts) {
-              if (part.inlineData && part.inlineData.data) {
-                queueAudioPlayback(part.inlineData.data);
+          if (!text) return;
+          const msg = JSON.parse(text);
+
+          if (msg.setupComplete) {
+            openedSetup = true;
+            await micPromise;
+            if (!userWantsListening) return;
+            isConnected = true;
+            isListening = true;
+            updateHud('🎙️ Mochi-Puff Live ON · Speak in Hindi or English! Click Mochi to stop.');
+            sendGreetingPrompt();
+            return;
+          }
+
+          if (msg.serverContent) {
+            const sc = msg.serverContent;
+
+            if (sc.interrupted) {
+              stopAllPlayback();
+              setIsThinking(false);
+            }
+
+            if (sc.modelTurn?.parts) {
+              for (const part of sc.modelTurn.parts) {
+                if (part.inlineData && part.inlineData.data) {
+                  queueAudioPlayback(part.inlineData.data);
+                }
               }
+            }
+
+            if (sc.inputTranscription?.text) {
+              showTranscript('user', sc.inputTranscription.text);
+              handleInstantVoiceTranscript(sc.inputTranscription.text);
+            }
+            if (sc.outputTranscription?.text) {
+              showTranscript('mochi', sc.outputTranscription.text);
             }
           }
 
-          if (sc.inputTranscription?.text) {
-            showTranscript('user', sc.inputTranscription.text);
-            handleInstantVoiceTranscript(sc.inputTranscription.text);
+          if (msg.interactionStatus) {
+            if (msg.interactionStatus === 'IN_PROGRESS') {
+              setIsThinking(true);
+            } else if (msg.interactionStatus === 'IDLE') {
+              setIsThinking(false);
+            }
           }
-          if (sc.outputTranscription?.text) {
-            showTranscript('mochi', sc.outputTranscription.text);
+
+          if (msg.toolCall?.functionCalls) {
+            handleToolCall(msg.toolCall.functionCalls);
           }
+        } catch (_err) {
+          // Ignore transient message parse errors safely
         }
+      };
 
-        if (msg.interactionStatus) {
-          if (msg.interactionStatus === 'IN_PROGRESS') {
-            setIsThinking(true);
-          } else if (msg.interactionStatus === 'IDLE') {
-            setIsThinking(false);
-          }
+      wsInstance.onerror = (err) => {
+        console.warn('[Voice] Gemini 3.8 Live socket error (mic VAD + SpeechRecognition active):', err);
+      };
+
+      wsInstance.onclose = () => {
+        if (socket === wsInstance) {
+          isConnected = false;
         }
-
-        if (msg.toolCall?.functionCalls) {
-          handleToolCall(msg.toolCall.functionCalls);
+        if (!userWantsListening) {
+          updateHud('👆 Click Mochi-Puff (the doll) to talk with Gemini 3.8 Live · Click again to stop');
+          return;
         }
-      } catch (_err) {
-        // Ignore transient message parse errors safely
-      }
-    };
+        // If this URL closed before setupComplete, try the fallback URL automatically
+        if (!openedSetup && urlIndex + 1 < candidateUrls.length) {
+          tryConnectUrl(urlIndex + 1);
+          return;
+        }
+        // CRITICAL: Keep microphone & VAD + SpeechRecognition active while userWantsListening is true!
+        isListening = true;
+        updateHud('🎙️ Mochi-Puff is listening... Speak in Hindi or English! Click Mochi to stop.');
+      };
+    }
 
-    socket.onerror = (err) => {
-      console.warn('[Voice] Gemini 3.8 Live proxy error:', err);
-      isConnected = false;
-      stopMicrophone();
-    };
-
-    socket.onclose = () => {
-      isConnected = false;
-      isListening = false;
-      isThinking = false;
-      isSpeaking = false;
-      stopMicrophone();
-      updateHud('👆 Click Mochi-Puff (the doll) to talk with Gemini 3.8 Live · Click again to stop');
-    };
+    tryConnectUrl(0);
   }
 
   function disconnectLiveAPI() {
+    sessionGenerationId++;
+    userWantsListening = false;
+    isSpeechListening = false;
+    isConnected = false;
+    isListening = false;
+    isSpeaking = false;
+    isThinking = false;
+    if (activeMouthInterval) {
+      clearInterval(activeMouthInterval);
+      activeMouthInterval = null;
+    }
+    // Use abort() instead of stop() so SpeechRecognition immediately discards buffered audio without firing a trailing onresult!
+    try { recognition?.abort(); } catch (e) {
+      try { recognition?.stop(); } catch (_e) {}
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
     stopMicrophone();
     stopAllPlayback();
     if (socket) {
@@ -1547,10 +2139,7 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       } catch (e) {}
       socket = null;
     }
-    isConnected = false;
-    isListening = false;
-    isSpeaking = false;
-    isThinking = false;
+    updateMicUi(false);
     updateHud('👆 Click Mochi-Puff (the doll) to talk with Gemini 3.8 Live · Click again to stop');
   }
 
@@ -1558,7 +2147,7 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     isSpeaking = speaking;
     if (speaking) {
       updateHud('🔊 Mochi-Puff is speaking... (Click Mochi anytime to stop)');
-    } else if (isListening) {
+    } else if (isListening || userWantsListening) {
       updateHud('🎙️ Mochi-Puff is listening... Speak now! Click Mochi to stop.');
     }
   }
@@ -1567,6 +2156,8 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     isThinking = thinking;
     if (thinking && !isSpeaking) {
       updateHud('🧠 Mochi-Puff is thinking... Click Mochi to stop.');
+    } else if (!thinking && !isSpeaking && (isListening || userWantsListening)) {
+      updateHud('🎙️ Mochi-Puff is listening... Speak now! Click Mochi to stop.');
     }
   }
 
@@ -1594,7 +2185,7 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
       if (creature && creature.animState) {
         creature.animState.isSpeaking = isSpeaking;
-        creature.animState.isListening = isListening;
+        creature.animState.isListening = Boolean(isListening || isSpeechListening || userWantsListening);
         creature.animState.speechVolume = outputVol;
       }
 
@@ -1605,7 +2196,7 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
   }
 
   // =========================================================================
-  // 5. LIVE TRANSCRIPT & KAWAII VOICE CHAT BAR
+  // 5. FALLBACK SPEECH RECOGNITION (CLEAN ZERO-UI MODE)
   // =========================================================================
 
   let recognition = null;
@@ -1623,27 +2214,37 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
       rec.lang = 'hi-IN'; // Catches Hindi, Hinglish, and English naturally
 
       rec.onresult = (event) => {
+        // CRITICAL: Ignore any trailing SpeechRecognition results if the user already stopped the microphone!
+        if (!userWantsListening || !isSpeechListening) return;
+
         const last = event.results[event.results.length - 1];
         if (last && last.isFinal) {
           const transcript = last[0].transcript;
           if (transcript) {
+            lastSpeechRecResultTime = Date.now();
+            vadRecording = false;
+            vadChunks = [];
+            vadSpeechFrames = 0;
+            vadSilenceFrames = 0;
+            // If Gemini 3.8 Live is actively connected, only trigger instant 3D animations and let Gemini Live speak!
+            if (isConnected && socket && socket.readyState === WebSocket.OPEN) {
+              handleInstantVoiceTranscript(transcript);
+              return;
+            }
             handleUserMessage(transcript);
           }
         }
       };
 
       rec.onerror = (e) => {
-        if (e.error === 'not-allowed') {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
           isSpeechListening = false;
-          updateMicUi(false);
         }
       };
 
       rec.onend = () => {
-        if (isSpeechListening) {
+        if (isSpeechListening && userWantsListening) {
           try { rec.start(); } catch (e) {}
-        } else {
-          updateMicUi(false);
         }
       };
 
@@ -1655,79 +2256,19 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
   function updateMicUi(listening) {
     if (typeof document === 'undefined') return;
-    let bar = document.getElementById('kawaii-chat-bar');
-    if (!bar && listening) {
-      bar = document.createElement('div');
-      bar.id = 'kawaii-chat-bar';
-      bar.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:9999; display:flex; align-items:center; gap:12px; background:rgba(15,23,42,0.88); padding:10px 20px; border-radius:9999px; backdrop-filter:blur(12px); border:2px solid rgba(244,114,182,0.6); box-shadow:0 10px 30px rgba(0,0,0,0.4); animation:fadeInUp 0.3s cubic-bezier(0.16,1,0.3,1);';
-      
-      const dot = document.createElement('div');
-      dot.style.cssText = 'width:12px; height:12px; background:#f43f5e; border-radius:50%; animation:pulse 1.2s infinite;';
-      bar.appendChild(dot);
-
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = 'Type or speak to Mochi (e.g. Tum ek king ho)...';
-      input.style.cssText = 'background:transparent; border:none; color:#fff; font-size:15px; outline:none; width:260px; font-family:system-ui, sans-serif;';
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && input.value.trim()) {
-          const val = input.value.trim();
-          input.value = '';
-          handleUserMessage(val);
-        }
-      });
-      bar.appendChild(input);
-
-      const sendBtn = document.createElement('button');
-      sendBtn.textContent = '➤';
-      sendBtn.style.cssText = 'background:#f43f5e; color:#white; border:none; width:34px; height:34px; border-radius:50%; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center;';
-      sendBtn.onclick = () => {
-        if (input.value.trim()) {
-          const val = input.value.trim();
-          input.value = '';
-          handleUserMessage(val);
-        }
-      };
-      bar.appendChild(sendBtn);
-
-      const closeBtn = document.createElement('button');
-      closeBtn.textContent = '✕';
-      closeBtn.style.cssText = 'background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; margin-left:4px;';
-      closeBtn.onclick = () => {
-        toggleSpeechListening();
-      };
-      bar.appendChild(closeBtn);
-
-      document.body.appendChild(bar);
-    } else if (bar && !listening) {
-      bar.remove();
-    }
+    const pill = document.getElementById('voice-status-pill');
+    if (pill) pill.remove();
+    const oldBar = document.getElementById('kawaii-chat-bar');
+    if (oldBar) oldBar.remove();
+    const micPill = document.getElementById('mochi-mic-pill');
+    if (micPill) micPill.remove();
   }
 
   function toggleSpeechListening() {
-    ensureAudioContext();
-    if (!recognition) {
-      recognition = initSpeechRecognition();
-    }
-
-    if (isSpeechListening) {
-      isSpeechListening = false;
-      isListening = false;
-      try { recognition?.stop(); } catch (e) {}
-      updateMicUi(false);
-      playMochiBoopSound(0.95);
+    if (userWantsListening || isListening || isSpeechListening) {
+      disconnectLiveAPI();
     } else {
-      isSpeechListening = true;
-      isListening = true;
-      try {
-        recognition?.start();
-        updateMicUi(true);
-        playMochiBoopSound(1.35);
-      } catch (e) {
-        // If speech recognition fails or permission denied, still show the interactive chat bar so user can type!
-        updateMicUi(true);
-        playMochiBoopSound(1.2);
-      }
+      connectLiveAPI();
     }
   }
 
@@ -1745,6 +2286,8 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     if (oldBar) oldBar.remove();
     const pill = document.getElementById('voice-status-pill');
     if (pill) pill.remove();
+    const micPill = document.getElementById('mochi-mic-pill');
+    if (micPill) micPill.remove();
     const bubbles = document.querySelectorAll('.voice-transcript-bubble, #voice-transcript-bubble');
     bubbles.forEach(b => b.remove());
   }
@@ -1755,17 +2298,27 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
   }
 
   // =========================================================================
-  // 6. DOLL CLICK TOGGLE INTERACTION
+  // 6. DOLL CLICK & PUSH INTERACTION
   // =========================================================================
 
   function handleCreatureClick() {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
     creature?.triggerBoop();
-    if (isConnected || isListening) {
+    if (userWantsListening || isConnected || isListening || isSpeechListening) {
       disconnectLiveAPI();
     } else {
       connectLiveAPI();
     }
     return true;
+  }
+
+  // Ensures microphone is active when user pushes/pets Mochi without disconnecting an active session
+  function ensureListening() {
+    if (!userWantsListening && !isListening && !isConnected) {
+      connectLiveAPI();
+    }
   }
 
   renderSubtitles();
@@ -1774,6 +2327,7 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     connect: connectLiveAPI,
     disconnect: disconnectLiveAPI,
     handleCreatureClick,
+    ensureListening,
     handleUserMessage,
     toggleSpeechListening,
     trigger5SecLaughter,
@@ -1786,10 +2340,13 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     executeCreatureAction,
     playAction: executeCreatureAction,
     speakCuteCartoonVoice,
+    speakCloneReply,
+    triggerScoldClonesSpeech,
     triggerTickleSpeech: trigger5SecLaughter,
     triggerPoutSpeech: trigger10SecPoutSpeech,
     isConnected: () => isConnected,
-    isListening: () => isListening,
+    isListening: () => Boolean(isListening || isSpeechListening || userWantsListening),
     isSpeaking: () => isSpeaking
   };
 }
+

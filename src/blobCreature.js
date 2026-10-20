@@ -21,6 +21,13 @@ import {
   playRoyalFanfareSound,
   playSpearClashSound,
   playSoldierCheerSound,
+  playMagicSpellSound,
+  playCameraShutterSound,
+  playGuitarConcertSound,
+  playDholBeatSound,
+  playCloneUniqueSound,
+  playBallKickSound,
+  playScoldShockSound,
   getActiveVocalEnvelope,
   setGlobalEmotionPitchMultiplier
 } from './soundEffects.js';
@@ -245,6 +252,7 @@ export function createBlobCreature(options = {}) {
   let onPoutDeflateCallback = options.onPoutDeflate || null;
   let onFriendsMischiefCallback = options.onFriendsMischief || null;
   let onWetShakeCallback = options.onWetShake || null;
+  let onCloneClickCallback = options.onCloneClick || null;
   const root = new THREE.Group();
   root.name = 'MochiPuffCreature';
 
@@ -700,6 +708,34 @@ export function createBlobCreature(options = {}) {
   }
   accessoriesGroup.add(glassesGroup);
 
+  // (E) Funny Handlebar Mustache ("Moochh lagao" / Selfie Funny Prop)
+  const mustacheGroup = new THREE.Group();
+  mustacheGroup.position.set(0, 0.052, 1.08);
+  mustacheGroup.visible = false;
+  const mustacheMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#27171c'),
+    roughness: 0.55,
+    metalness: 0.08
+  });
+  for (const side of [-1, 1]) {
+    const mainCurl = new THREE.Mesh(
+      new THREE.TorusGeometry(0.11, 0.036, 12, 24, Math.PI * 0.85),
+      mustacheMat
+    );
+    mainCurl.position.set(side * 0.105, -0.01, 0);
+    mainCurl.rotation.z = side > 0 ? Math.PI * 0.12 : Math.PI * 0.03;
+    mainCurl.scale.set(1.15, 0.78, 0.65);
+    mustacheGroup.add(mainCurl);
+
+    const tipCurl = new THREE.Mesh(
+      new THREE.SphereGeometry(0.032, 10, 8),
+      mustacheMat
+    );
+    tipCurl.position.set(side * 0.215, 0.025, 0.01);
+    mustacheGroup.add(tipCurl);
+  }
+  accessoriesGroup.add(mustacheGroup);
+
   // =========================================================================
   // 3. INTERACTIVE WEATHER: 3D RAIN & CUTE UMBRELLA ("Baarish kar do" / "Chhata")
   // =========================================================================
@@ -984,66 +1020,117 @@ export function createBlobCreature(options = {}) {
   }
 
   // =========================================================================
-  // 1. MINI FRIEND CLONES ("Chintu, Pintu, Golu, Molu" — well separated + mischief!)
+  // 1. MINI FRIEND CLONES ("Chintu, Pintu, Golu, Molu, Bholu" + 3D Play Ball + Scold Line-Up!)
   // =========================================================================
   const friendsContainer = new THREE.Group();
   friendsContainer.name = 'MochiMiniFriends';
   friendsContainer.visible = false;
 
   const miniBodyGeo = createOrganicBlobGeometry(44, 32);
-  // Placed well-separated around Mochi so they never overlap or crowd each other!
+  // Each clone has a distinct playful interaction on click and rotating cute voice lines!
   const FRIEND_CONFIGS = [
     {
       name: 'Chintu',
+      title: 'Somersault Champ',
+      interactionType: 'somersault',
       baseColor: '#d97706',
       tipColor: '#fef08a',
       blushColor: '#fb7185',
-      offsetX: -1.95,
+      offsetX: -1.92,
       offsetZ: 0.15,
       scale: 0.33,
       yaw: 0.42,
-      phaseOffset: 0.0
+      phaseOffset: 0.0,
+      replies: [
+        'Yuhu! Main Chintu hoon! Dekho meri hawa me double somersault kalabazi! Kyaaa!',
+        'Hehehe! Chintu sabse tez bhaagta hai! Ball idhar pass karo na!',
+        'Oye hoye! Dekha Chintu ka front flip? Olympic gold medal pakka!'
+      ]
     },
     {
       name: 'Pintu',
+      title: 'Tornado Spinner',
+      interactionType: 'tornado_spin',
       baseColor: '#2563eb',
       tipColor: '#a5f3fc',
       blushColor: '#f472b6',
-      offsetX: 1.95,
+      offsetX: 1.92,
       offsetZ: 0.15,
       scale: 0.34,
       yaw: -0.42,
-      phaseOffset: 1.5
+      phaseOffset: 1.5,
+      replies: [
+        'Weeee! Main Pintu hoon! Dekho mera super-fast helicopter tornado spin! Chakkar aa gaya!',
+        'Haha! Pintu ko pakadna mushkil hi nahi namumkin hai! Ghoom-ghoom-ghoom!',
+        'Yay! Dekho main lattu ki tarah gol-gol ghoom ke ball kick karta hoon!'
+      ]
     },
     {
       name: 'Golu',
+      title: 'Belly Bouncer',
+      interactionType: 'belly_bounce',
       baseColor: '#15803d',
       tipColor: '#bbf7d0',
       blushColor: '#fda4af',
       offsetX: -1.18,
       offsetZ: 1.18,
-      scale: 0.28,
+      scale: 0.29,
       yaw: 0.28,
-      phaseOffset: 3.1
+      phaseOffset: 3.1,
+      replies: [
+        'Boing-boing! Main Golu-Molu sa Golu hoon! Dekho mera cute jelly tummy bounce!',
+        'Hehehe! Gudgudi mat karo, mera gol-matol pet rasgulle jaisa uchhal raha hai!',
+        'Aww! Main chhota Golu hoon par ball ko sabse door kick karta hoon!'
+      ]
     },
     {
       name: 'Molu',
+      title: 'Cartwheel Acrobat',
+      interactionType: 'cartwheel',
       baseColor: '#7e22ce',
       tipColor: '#f5d0fe',
       blushColor: '#ff5c93',
       offsetX: 1.18,
       offsetZ: 1.18,
-      scale: 0.29,
+      scale: 0.31,
       yaw: -0.28,
-      phaseOffset: 4.6
+      phaseOffset: 4.6,
+      replies: [
+        'Ta-da! Main Molu hoon! Dekho meri side-to-side cartwheel roll! Kaisi lagi?',
+        'Kyaaa! Molu ki barrel roll dekh ke sab taali bajate hain! Hee-hee!',
+        'Oho! Ball mere paas aayi! Dekho mera stylish cartwheel pass!'
+      ]
+    },
+    {
+      name: 'Bholu',
+      title: 'Backflip Rascal',
+      interactionType: 'backflip',
+      baseColor: '#db2777',
+      tipColor: '#fbcfe8',
+      blushColor: '#ff1e74',
+      offsetX: 0.0,
+      offsetZ: 1.42,
+      scale: 0.33,
+      yaw: 0.0,
+      phaseOffset: 2.3,
+      replies: [
+        'Hihihi! Naam Bholu hai par main sabse bada shararti hoon! Dekho mera backflip!',
+        'Yay! Bholu ki ulto-pulto backflip! Ab ball meri baari hai!',
+        'Aww! Main sabse pyara Bholu clone hoon, mujhe daatna mat warna aankhen badi kar lunga!'
+      ]
     }
   ];
+
+  // Shared materials for clone shocked "O" mouths (when scolded!)
+  const cloneShockMouthMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#2b0922') });
+  const cloneShockTongueMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff6b9d') });
 
   const miniFriends = [];
   for (let i = 0; i < FRIEND_CONFIGS.length; i++) {
     const cfg = FRIEND_CONFIGS[i];
     const fGroup = new THREE.Group();
     fGroup.name = `MiniFriend_${cfg.name}`;
+    fGroup.userData.cloneIndex = i;
 
     const fSkinMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(cfg.baseColor),
@@ -1053,6 +1140,7 @@ export function createBlobCreature(options = {}) {
     const fBody = new THREE.Mesh(miniBodyGeo, fSkinMat);
     fBody.castShadow = true;
     fBody.receiveShadow = true;
+    fBody.userData.cloneIndex = i;
     fGroup.add(fBody);
 
     for (let sh = 1; sh <= 4; sh++) {
@@ -1068,6 +1156,7 @@ export function createBlobCreature(options = {}) {
         depthWrite: false
       });
       const shMesh = new THREE.Mesh(miniBodyGeo, shMat);
+      shMesh.userData.cloneIndex = i;
       const sFactor = 1.0 + frac * 0.14;
       shMesh.scale.set(sFactor, sFactor, sFactor);
       fGroup.add(shMesh);
@@ -1083,6 +1172,7 @@ export function createBlobCreature(options = {}) {
       const fEyeballGeo = new THREE.SphereGeometry(0.175, 20, 16);
       fEyeballGeo.scale(0.96, 1.08, 0.68);
       const fEyeball = new THREE.Mesh(fEyeballGeo, eyeMaterial);
+      fEyeball.userData.cloneIndex = i;
       fEyePivot.add(fEyeball);
 
       const fCatchGeo = new THREE.SphereGeometry(0.052, 12, 10);
@@ -1122,6 +1212,25 @@ export function createBlobCreature(options = {}) {
 
     const fMouth = mouthGroup.clone();
     fMouth.position.set(0, 0.035, 1.055);
+    const fSmileArcs = [...fMouth.children];
+
+    // Add 3D Shocked/Wide-Open "O" Mouth inside fMouth ("muh and akhe badi karake")
+    const fOpenMouth = new THREE.Group();
+    fOpenMouth.position.set(0, -0.055, 0.025);
+    fOpenMouth.visible = false;
+
+    const cavityGeo = new THREE.SphereGeometry(0.085, 16, 14);
+    cavityGeo.scale(1.15, 1.38, 0.45);
+    const cavityMesh = new THREE.Mesh(cavityGeo, cloneShockMouthMat);
+    fOpenMouth.add(cavityMesh);
+
+    const tongueGeo = new THREE.SphereGeometry(0.052, 12, 10);
+    tongueGeo.scale(1.1, 0.72, 0.48);
+    const tongueMesh = new THREE.Mesh(tongueGeo, cloneShockTongueMat);
+    tongueMesh.position.set(0, -0.038, 0.018);
+    fOpenMouth.add(tongueMesh);
+
+    fMouth.add(fOpenMouth);
     fGroup.add(fMouth);
 
     fGroup.scale.set(0.001, 0.001, 0.001);
@@ -1130,12 +1239,69 @@ export function createBlobCreature(options = {}) {
       group: fGroup,
       eyes: fEyes,
       mouth: fMouth,
+      smileArcs: fSmileArcs,
+      openMouth: fOpenMouth,
       cfg,
       spawnProgress: 0.0,
-      runOffsetX: 0.0,
-      runOffsetZ: 0.0
+      runOffsetX: cfg.offsetX * 0.5,
+      runOffsetZ: cfg.offsetZ * 0.5,
+      boostTimer: 0.0,
+      boostDuration: 1.5,
+      activeTrick: cfg.interactionType,
+      replyCursor: 0
     });
   }
+
+  // =========================================================================
+  // 1B. 3D COLORFUL PLAY BALL FOR MOCHI CLONES ("isme ball bhi banao")
+  // =========================================================================
+  const cloneBallGroup = new THREE.Group();
+  cloneBallGroup.name = 'MochiClonesPlayBall';
+  const cloneBallMesh = new THREE.Group();
+  cloneBallMesh.userData.isCloneBall = true;
+
+  const ballRadius = 0.24;
+  const ballCoreMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#ffffff'),
+    roughness: 0.15,
+    metalness: 0.05,
+    clearcoat: 0.9
+  });
+  const ballCore = new THREE.Mesh(new THREE.SphereGeometry(ballRadius, 28, 24), ballCoreMat);
+  ballCore.castShadow = true;
+  ballCore.receiveShadow = true;
+  ballCore.userData.isCloneBall = true;
+  cloneBallMesh.add(ballCore);
+
+  // Colorful intersecting beach/soccer stripes (Coral Pink, Electric Cyan, Sunny Gold)
+  const ballBandColors = ['#ff2a85', '#00bbf9', '#fee440'];
+  for (let b = 0; b < 3; b++) {
+    const bandMat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(ballBandColors[b]),
+      emissive: new THREE.Color(ballBandColors[b]),
+      emissiveIntensity: 0.18,
+      roughness: 0.18,
+      clearcoat: 0.85
+    });
+    const band = new THREE.Mesh(new THREE.TorusGeometry(ballRadius * 0.985, 0.042, 12, 32), bandMat);
+    band.userData.isCloneBall = true;
+    if (b === 0) band.rotation.x = Math.PI * 0.5;
+    if (b === 1) band.rotation.y = Math.PI * 0.5;
+    cloneBallMesh.add(band);
+  }
+  cloneBallGroup.add(cloneBallMesh);
+
+  // Soft ground shadow under the bouncing 3D ball
+  const ballShadowMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#0f172a'),
+    transparent: true,
+    opacity: 0.28,
+    depthWrite: false
+  });
+  const cloneBallShadow = new THREE.Mesh(new THREE.CircleGeometry(ballRadius * 1.05, 24), ballShadowMat);
+  cloneBallShadow.rotation.x = -Math.PI * 0.5;
+  cloneBallGroup.add(cloneBallShadow);
+  friendsContainer.add(cloneBallGroup);
 
   // =========================================================================
   // 4C. CUTE MINI ROYAL SOLDIERS ("भाला सैनिक" — King Mode & Duel/Fight)
@@ -1143,7 +1309,6 @@ export function createBlobCreature(options = {}) {
   const soldiersContainer = new THREE.Group();
   soldiersContainer.name = 'MochiRoyalSoldiers';
   soldiersContainer.visible = false;
-  root.add(soldiersContainer);
 
   const SOLDIER_CONFIGS = [
     {
@@ -1437,6 +1602,443 @@ export function createBlobCreature(options = {}) {
     }
   }
 
+  // =========================================================================
+  // 8. 3D MAGIC WAND, LEVITATION HALO & ORBITING BUTTERFLIES ("Jadoo dikhao" / "Magic")
+  // =========================================================================
+  const magicWandGroup = new THREE.Group();
+  magicWandGroup.name = 'MagicStarWand';
+  magicWandGroup.position.set(0.96, 0.05, 0.52);
+  magicWandGroup.rotation.set(0.35, -0.2, -0.38);
+  magicWandGroup.visible = false;
+  root.add(magicWandGroup);
+
+  const wandStickMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f472b6'),
+    emissive: new THREE.Color('#be185d'),
+    emissiveIntensity: 0.2,
+    roughness: 0.22,
+    metalness: 0.45
+  });
+  const wandStick = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.038, 0.76, 16), wandStickMat);
+  wandStick.position.y = 0.12;
+  magicWandGroup.add(wandStick);
+
+  // Golden collar rings on wand
+  for (const ry of [-0.22, 0.05, 0.42]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.012, 10, 20), goldMat);
+    ring.rotation.x = Math.PI * 0.5;
+    ring.position.y = ry;
+    magicWandGroup.add(ring);
+  }
+
+  // 5-Pointed 3D Extruded Star Tip at top of wand
+  const starShape = new THREE.Shape();
+  const starPts = 5;
+  const outerR = 0.17;
+  const innerR = 0.078;
+  for (let i = 0; i < starPts * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const ang = (i / (starPts * 2)) * Math.PI * 2 - Math.PI * 0.5;
+    const sx = Math.cos(ang) * r;
+    const sy = Math.sin(ang) * r;
+    if (i === 0) starShape.moveTo(sx, sy);
+    else starShape.lineTo(sx, sy);
+  }
+  starShape.closePath();
+
+  const starGeo = new THREE.ExtrudeGeometry(starShape, {
+    depth: 0.045,
+    bevelEnabled: true,
+    bevelThickness: 0.018,
+    bevelSize: 0.015,
+    bevelSegments: 3
+  });
+  starGeo.center();
+  const wandStarMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#fde047'),
+    emissive: new THREE.Color('#f59e0b'),
+    emissiveIntensity: 0.65,
+    roughness: 0.12,
+    metalness: 0.75,
+    clearcoat: 1.0
+  });
+  const wandStarMesh = new THREE.Mesh(starGeo, wandStarMat);
+  wandStarMesh.position.y = 0.56;
+  magicWandGroup.add(wandStarMesh);
+
+  // Glowing Levitation Aura Ring beneath Mochi during Magic Mode
+  const magicAuraRing = new THREE.Group();
+  magicAuraRing.position.set(0, -0.82, 0);
+  magicAuraRing.visible = false;
+  root.add(magicAuraRing);
+
+  const auraTorusMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#f472b6'),
+    transparent: true,
+    opacity: 0.75
+  });
+  const auraTorus = new THREE.Mesh(new THREE.TorusGeometry(0.92, 0.022, 12, 48), auraTorusMat);
+  auraTorus.rotation.x = Math.PI * 0.5;
+  magicAuraRing.add(auraTorus);
+
+  for (let g = 0; g < 6; g++) {
+    const gem = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.055),
+      new THREE.MeshBasicMaterial({ color: g % 2 === 0 ? '#fde047' : '#38bdf8' })
+    );
+    const ga = (g / 6) * Math.PI * 2;
+    gem.position.set(Math.cos(ga) * 0.92, 0, Math.sin(ga) * 0.92);
+    magicAuraRing.add(gem);
+  }
+
+  // 3D Orbiting Butterflies Container (World-relative around Mochi)
+  const butterfliesContainer = new THREE.Group();
+  butterfliesContainer.name = 'MagicButterflies';
+  butterfliesContainer.visible = false;
+
+  const butterflyColors = ['#f472b6', '#38bdf8', '#fde047', '#a78bfa', '#4ade80', '#fb7185', '#60a5fa'];
+  const butterflies = [];
+
+  const upperWingGeo = new THREE.CircleGeometry(0.11, 16);
+  upperWingGeo.scale(1.25, 0.88, 1.0);
+  const lowerWingGeo = new THREE.CircleGeometry(0.075, 14);
+  lowerWingGeo.scale(1.1, 0.82, 1.0);
+  const bfBodyGeo = new THREE.CapsuleGeometry(0.016, 0.11, 6, 8);
+
+  for (let b = 0; b < 7; b++) {
+    const bfGroup = new THREE.Group();
+    const wingCol = new THREE.Color(butterflyColors[b % butterflyColors.length]);
+    const wingMat = new THREE.MeshStandardMaterial({
+      color: wingCol,
+      emissive: wingCol,
+      emissiveIntensity: 0.42,
+      roughness: 0.25,
+      side: THREE.DoubleSide
+    });
+    const bfBody = new THREE.Mesh(
+      bfBodyGeo,
+      new THREE.MeshStandardMaterial({ color: '#1e1b4b', roughness: 0.4 })
+    );
+    bfBody.rotation.x = Math.PI * 0.5;
+    bfGroup.add(bfBody);
+
+    const leftWingPivot = new THREE.Group();
+    const uWingL = new THREE.Mesh(upperWingGeo, wingMat);
+    uWingL.position.set(-0.08, 0.02, 0.02);
+    const lWingL = new THREE.Mesh(lowerWingGeo, wingMat);
+    lWingL.position.set(-0.06, -0.01, -0.04);
+    leftWingPivot.add(uWingL, lWingL);
+    bfGroup.add(leftWingPivot);
+
+    const rightWingPivot = new THREE.Group();
+    const uWingR = new THREE.Mesh(upperWingGeo, wingMat);
+    uWingR.position.set(0.08, 0.02, 0.02);
+    const lWingR = new THREE.Mesh(lowerWingGeo, wingMat);
+    lWingR.position.set(0.06, -0.01, -0.04);
+    rightWingPivot.add(uWingR, lWingR);
+    bfGroup.add(rightWingPivot);
+
+    butterfliesContainer.add(bfGroup);
+    butterflies.push({
+      group: bfGroup,
+      leftWingPivot,
+      rightWingPivot,
+      angle: (b / 7) * Math.PI * 2,
+      radius: 1.25 + (b % 3) * 0.35,
+      heightOffset: -0.25 + (b % 4) * 0.38,
+      speed: 1.25 + (b % 3) * 0.25,
+      phase: b * 0.9
+    });
+  }
+
+  // =========================================================================
+  // 9. 3D SELFIE CAMERA POSE & STUDIO FLASH ("Selfie lete hain" / "Photo khicho")
+  // =========================================================================
+  const selfieCameraGroup = new THREE.Group();
+  selfieCameraGroup.name = 'SelfieVintageCamera';
+  selfieCameraGroup.position.set(0.74, 0.05, 1.22);
+  selfieCameraGroup.rotation.set(-0.08, -0.45, 0.08);
+  selfieCameraGroup.visible = false;
+  root.add(selfieCameraGroup);
+
+  const camBodyMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#2dd4bf'),
+    roughness: 0.2,
+    metalness: 0.15,
+    clearcoat: 0.85
+  });
+  const camSilverMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f1f5f9'),
+    roughness: 0.18,
+    metalness: 0.85
+  });
+  const camMainBox = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.26, 0.16), camBodyMat);
+  selfieCameraGroup.add(camMainBox);
+
+  const camTopPlate = new THREE.Mesh(new THREE.BoxGeometry(0.385, 0.065, 0.165), camSilverMat);
+  camTopPlate.position.y = 0.11;
+  selfieCameraGroup.add(camTopPlate);
+
+  // Red shutter button on top
+  const shutterBtn = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.04, 14), rubyMat);
+  shutterBtn.position.set(0.11, 0.155, 0);
+  selfieCameraGroup.add(shutterBtn);
+
+  // Multi-element optical camera lens pointing toward Mochi / viewer
+  const camLensBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.105, 0.12, 24), camSilverMat);
+  camLensBarrel.rotation.x = Math.PI * 0.5;
+  camLensBarrel.position.set(0, -0.01, -0.11);
+  selfieCameraGroup.add(camLensBarrel);
+
+  const camLensGlass = new THREE.Mesh(new THREE.CircleGeometry(0.082, 24), lensMat);
+  camLensGlass.rotation.y = Math.PI;
+  camLensGlass.position.set(0, -0.01, -0.172);
+  selfieCameraGroup.add(camLensGlass);
+
+  // Flash window & bright studio flash burst star
+  const flashBurstMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#ffffff'),
+    transparent: true,
+    opacity: 0.0,
+    side: THREE.DoubleSide
+  });
+  const flashBurstMesh = new THREE.Mesh(new THREE.CircleGeometry(0.42, 16), flashBurstMat);
+  flashBurstMesh.position.set(-0.11, 0.08, -0.12);
+  selfieCameraGroup.add(flashBurstMesh);
+
+  // Instant Polaroid Photo Frame popping out of camera bottom!
+  const polaroidFrameGroup = new THREE.Group();
+  polaroidFrameGroup.position.set(0, -0.18, 0.04);
+  const polaroidCardMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3, metalness: 0.05 });
+  const polaroidCard = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.012), polaroidCardMat);
+  polaroidFrameGroup.add(polaroidCard);
+  const polaroidPicMat = new THREE.MeshBasicMaterial({ color: '#ff85b3' });
+  const polaroidPic = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 0.17), polaroidPicMat);
+  polaroidPic.position.set(0, 0.025, 0.008);
+  polaroidFrameGroup.add(polaroidPic);
+  selfieCameraGroup.add(polaroidFrameGroup);
+
+  // Cute 3D Peace-Sign / V-Sign Model Paw raised on the left side during Selfie Pose!
+  const peaceSignPawGroup = new THREE.Group();
+  peaceSignPawGroup.position.set(-0.76, 0.18, 0.92);
+  peaceSignPawGroup.rotation.set(0.15, 0.25, -0.28);
+  peaceSignPawGroup.visible = false;
+  const selfiePawFurMat = new THREE.MeshStandardMaterial({ color: '#ff9ebb', roughness: 0.45, metalness: 0.05 });
+  const selfiePawPadMat = new THREE.MeshStandardMaterial({ color: '#ff477e', roughness: 0.35, metalness: 0.08 });
+  const pawPalm = new THREE.Mesh(new THREE.SphereGeometry(0.13, 18, 16), selfiePawFurMat);
+  pawPalm.scale.set(1.0, 0.88, 0.72);
+  peaceSignPawGroup.add(pawPalm);
+  const pawCenterPad = new THREE.Mesh(new THREE.SphereGeometry(0.055, 14, 12), selfiePawPadMat);
+  pawCenterPad.position.set(0, -0.01, 0.085);
+  pawCenterPad.scale.set(1.1, 0.9, 0.45);
+  peaceSignPawGroup.add(pawCenterPad);
+  for (const fSide of [-1, 1]) {
+    const vFinger = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.14, 10, 12), selfiePawFurMat);
+    vFinger.position.set(fSide * 0.058, 0.13, 0.01);
+    vFinger.rotation.z = -fSide * 0.28;
+    peaceSignPawGroup.add(vFinger);
+  }
+  root.add(peaceSignPawGroup);
+
+  // Oversized Star-Shaped Party Glasses (Funny 3D Prop for Selfie Camera!)
+  const starGlassesGroup = new THREE.Group();
+  starGlassesGroup.position.set(0, 0.17, 1.07);
+  starGlassesGroup.visible = false;
+  const starFrameMat = new THREE.MeshStandardMaterial({
+    color: '#ff007f',
+    roughness: 0.18,
+    metalness: 0.75,
+    emissive: '#ff1493',
+    emissiveIntensity: 0.25
+  });
+  const starLensMat = new THREE.MeshPhysicalMaterial({
+    color: '#00f5d4',
+    roughness: 0.08,
+    metalness: 0.35,
+    transmission: 0.45,
+    transparent: true,
+    opacity: 0.85
+  });
+  const starBridge = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.26, 12), starFrameMat);
+  starBridge.rotation.z = Math.PI * 0.5;
+  starGlassesGroup.add(starBridge);
+  for (const side of [-1, 1]) {
+    const sEyeGroup = new THREE.Group();
+    sEyeGroup.position.set(side * 0.34, 0, 0);
+    for (let pt = 0; pt < 5; pt++) {
+      const pAng = (pt / 5) * Math.PI * 2 + Math.PI * 0.5;
+      const rayCone = new THREE.Mesh(new THREE.ConeGeometry(0.095, 0.18, 4), starFrameMat);
+      rayCone.position.set(Math.cos(pAng) * 0.17, Math.sin(pAng) * 0.17, 0);
+      rayCone.rotation.z = pAng - Math.PI * 0.5;
+      rayCone.scale.set(1.0, 1.0, 0.28);
+      sEyeGroup.add(rayCone);
+    }
+    const rimTorus = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.032, 12, 24), starFrameMat);
+    sEyeGroup.add(rimTorus);
+    const sLens = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.018, 20), starLensMat);
+    sLens.rotation.x = Math.PI * 0.5;
+    sEyeGroup.add(sLens);
+    starGlassesGroup.add(sEyeGroup);
+  }
+  root.add(starGlassesGroup);
+
+  // =========================================================================
+  // 10. 3D MUSICAL CONCERT: ROCKSTAR GUITAR, PUNJABI DHOL & MUSIC NOTES
+  // =========================================================================
+  const guitarGroup = new THREE.Group();
+  guitarGroup.name = 'RockstarGuitar';
+  guitarGroup.position.set(0.06, -0.18, 1.08);
+  guitarGroup.rotation.set(0.12, 0.08, -0.45);
+  guitarGroup.visible = false;
+  root.add(guitarGroup);
+
+  const guitarBodyMat = new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color('#e11d48'),
+    emissive: new THREE.Color('#881337'),
+    emissiveIntensity: 0.18,
+    roughness: 0.15,
+    metalness: 0.2,
+    clearcoat: 1.0
+  });
+  const guitarWoodMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#fde68a'),
+    roughness: 0.35,
+    metalness: 0.1
+  });
+  const lowerBout = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.09, 24), guitarBodyMat);
+  lowerBout.rotation.x = Math.PI * 0.5;
+  lowerBout.position.set(-0.12, -0.06, 0);
+  guitarGroup.add(lowerBout);
+
+  const upperBout = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.09, 24), guitarBodyMat);
+  upperBout.rotation.x = Math.PI * 0.5;
+  upperBout.position.set(0.12, 0.06, 0);
+  guitarGroup.add(upperBout);
+
+  const soundHole = new THREE.Mesh(
+    new THREE.CircleGeometry(0.085, 20),
+    new THREE.MeshBasicMaterial({ color: '#1e1b4b' })
+  );
+  soundHole.position.set(0.05, 0.02, 0.048);
+  guitarGroup.add(soundHole);
+
+  const soundHoleRing = new THREE.Mesh(new THREE.RingGeometry(0.085, 0.105, 24), goldMat);
+  soundHoleRing.position.set(0.05, 0.02, 0.049);
+  guitarGroup.add(soundHoleRing);
+
+  const guitarNeck = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.065, 0.04), guitarWoodMat);
+  guitarNeck.position.set(0.52, 0.24, 0.01);
+  guitarNeck.rotation.z = 0.42;
+  guitarGroup.add(guitarNeck);
+
+  const guitarHeadstock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.09, 0.045), guitarBodyMat);
+  guitarHeadstock.position.set(0.85, 0.39, 0.01);
+  guitarHeadstock.rotation.z = 0.32;
+  guitarGroup.add(guitarHeadstock);
+
+  // Festive Punjabi Dhol Drum ("Dhol bajao" / "Bhangra")
+  const dholGroup = new THREE.Group();
+  dholGroup.name = 'FestivePunjabiDhol';
+  dholGroup.position.set(0.0, -0.22, 1.14);
+  dholGroup.rotation.set(0.08, 0.0, 0.06);
+  dholGroup.visible = false;
+  root.add(dholGroup);
+
+  const dholWoodMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#b45309'),
+    roughness: 0.32,
+    metalness: 0.25
+  });
+  const dholSkinMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#fef3c7'),
+    roughness: 0.45
+  });
+  // Barrel-shaped Dhol body (2 joined frustums)
+  const dholLeftHalf = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.27, 0.34, 24), dholWoodMat);
+  dholLeftHalf.rotation.z = Math.PI * 0.5;
+  dholLeftHalf.position.x = -0.17;
+  dholGroup.add(dholLeftHalf);
+
+  const dholRightHalf = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.22, 0.34, 24), dholWoodMat);
+  dholRightHalf.rotation.z = Math.PI * 0.5;
+  dholRightHalf.position.x = 0.17;
+  dholGroup.add(dholRightHalf);
+
+  // Golden & ruby festive bands around the Dhol
+  for (const bx of [-0.33, -0.12, 0.0, 0.12, 0.33]) {
+    const rBand = new THREE.Mesh(
+      new THREE.TorusGeometry(Math.abs(bx) > 0.25 ? 0.225 : 0.268, 0.016, 10, 24),
+      bx === 0 ? rubyMat : goldMat
+    );
+    rBand.rotation.y = Math.PI * 0.5;
+    rBand.position.x = bx;
+    dholGroup.add(rBand);
+  }
+
+  // Drumheads on both ends
+  for (const side of [-1, 1]) {
+    const headDisk = new THREE.Mesh(new THREE.CylinderGeometry(0.218, 0.218, 0.015, 24), dholSkinMat);
+    headDisk.rotation.z = Math.PI * 0.5;
+    headDisk.position.x = side * 0.342;
+    dholGroup.add(headDisk);
+  }
+
+  // Animated Dhol sticks (Dagga & Tilli)
+  const dholSticks = [];
+  for (const side of [-1, 1]) {
+    const stickPivot = new THREE.Group();
+    stickPivot.position.set(side * 0.42, 0.18, 0.08);
+    const stickShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.28, 10), guitarWoodMat);
+    stickShaft.position.y = -0.1;
+    stickPivot.add(stickShaft);
+    if (side < 0) {
+      // Curved bass Dagga beater head
+      const beater = new THREE.Mesh(new THREE.SphereGeometry(0.036, 10, 8), rubyMat);
+      beater.position.set(0.02, -0.24, 0);
+      stickPivot.add(beater);
+    }
+    dholGroup.add(stickPivot);
+    dholSticks.push({ pivot: stickPivot, side });
+  }
+
+  // 3D Floating Musical Notes around Mochi during Guitar or Dhol concert
+  const musicNotesGroup = new THREE.Group();
+  musicNotesGroup.name = 'ConcertMusicNotes';
+  musicNotesGroup.visible = false;
+  root.add(musicNotesGroup);
+
+  const noteColors = ['#fde047', '#38bdf8', '#f472b6', '#4ade80'];
+  const musicNotes = [];
+  for (let n = 0; n < 8; n++) {
+    const nGroup = new THREE.Group();
+    const nMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(noteColors[n % noteColors.length]),
+      emissive: new THREE.Color(noteColors[n % noteColors.length]),
+      emissiveIntensity: 0.5,
+      roughness: 0.2
+    });
+    const noteHead = new THREE.Mesh(new THREE.SphereGeometry(0.048, 12, 10), nMat);
+    noteHead.scale.set(1.25, 0.9, 0.7);
+    nGroup.add(noteHead);
+
+    const noteStem = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.16, 8), nMat);
+    noteStem.position.set(0.045, 0.08, 0);
+    nGroup.add(noteStem);
+
+    const noteFlag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.03, 0.012), nMat);
+    noteFlag.position.set(0.07, 0.145, 0);
+    noteFlag.rotation.z = -0.35;
+    nGroup.add(noteFlag);
+
+    musicNotesGroup.add(nGroup);
+    musicNotes.push({
+      group: nGroup,
+      angle: (n / 8) * Math.PI * 2,
+      radius: 1.15 + (n % 3) * 0.22,
+      phase: n / 8
+    });
+  }
+
   // Animation & physics state for creature motion (coupled to GPGPU fur inertia)
   const animState = {
     time: 0,
@@ -1468,6 +2070,20 @@ export function createBlobCreature(options = {}) {
     friendsMischiefTriggered: false,
     friendsRunningWild: false,
     awaitingFriendDismissConfirm: false,
+    clonesOnlyMode: false,
+    clonesScolded: false,
+    clonesScoldedTimer: 0.0,
+    lastCloneUtpatSoundTime: 0.0,
+    ballState: {
+      x: 0.0,
+      y: 0.24,
+      z: 0.65,
+      vx: 0.95,
+      vy: 1.4,
+      vz: -0.45,
+      targetCloneIdx: 0,
+      kickCooldown: 0.0
+    },
     soldiersVisible: false,
     soldiersTimer: 0.0,
     soldiersActiveTime: 0.0,
@@ -1475,11 +2091,14 @@ export function createBlobCreature(options = {}) {
     soldiersFightTimer: 0.0,
     soldiersPlayTimer: 0.0,
     lastClashSoundTime: 0,
+    selfieComboIndex: 0,
     accessories: {
       crown: false,
       party_hat: false,
       bowtie: false,
-      sunglasses: false
+      sunglasses: false,
+      mustache: false,
+      star_glasses: false
     },
     weatherMode: 'clear',
     isRaining: false,
@@ -1490,6 +2109,9 @@ export function createBlobCreature(options = {}) {
     bubblesActive: false,
     bubblesTimer: 0.0,
     dryerActive: false,
+    magicActive: false,
+    magicTimer: 0.0,
+    selfieFlashTimer: 0.0,
     prevPosition: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
     angularVelocity: new THREE.Vector3(),
@@ -1741,6 +2363,8 @@ export function createBlobCreature(options = {}) {
       animState.accessories.party_hat = false;
       animState.accessories.bowtie = false;
       animState.accessories.sunglasses = false;
+      animState.accessories.mustache = false;
+      animState.accessories.star_glasses = false;
     } else if (key.includes('crown') || key.includes('taj')) {
       const next = state !== undefined ? Boolean(state) : !animState.accessories.crown;
       animState.accessories.crown = next;
@@ -1751,19 +2375,167 @@ export function createBlobCreature(options = {}) {
       if (next) animState.accessories.crown = false;
     } else if (key.includes('bow') || key.includes('tie')) {
       animState.accessories.bowtie = state !== undefined ? Boolean(state) : !animState.accessories.bowtie;
+    } else if (key.includes('star_glass') || key.includes('funky') || key.includes('star_shade')) {
+      const next = state !== undefined ? Boolean(state) : !animState.accessories.star_glasses;
+      animState.accessories.star_glasses = next;
+      if (next) animState.accessories.sunglasses = false;
     } else if (key.includes('glass') || key.includes('chashma') || key.includes('goggles') || key.includes('shades')) {
-      animState.accessories.sunglasses = state !== undefined ? Boolean(state) : !animState.accessories.sunglasses;
+      const next = state !== undefined ? Boolean(state) : !animState.accessories.sunglasses;
+      animState.accessories.sunglasses = next;
+      if (next) animState.accessories.star_glasses = false;
+    } else if (key.includes('mustache') || key.includes('mooch') || key.includes('muchh') || key.includes('funny')) {
+      animState.accessories.mustache = state !== undefined ? Boolean(state) : !animState.accessories.mustache;
     }
 
     crownGroup.visible = animState.accessories.crown;
     partyHatGroup.visible = animState.accessories.party_hat;
     bowtieGroup.visible = animState.accessories.bowtie;
     glassesGroup.visible = animState.accessories.sunglasses;
+    mustacheGroup.visible = animState.accessories.mustache;
+    starGlassesGroup.visible = animState.accessories.star_glasses;
     animState.boopImpulse = 0.55;
     if (canPlaySfx(80)) {
       playAccessoryEquipSound();
     }
     return animState.accessories;
+  }
+
+  // Dedicated "Mochi Clones Only" mode (selected from the top bar next to AR View):
+  // Hides the Big Mochi (`root.visible = false`) and lets all 5 small Mochi clones roam and play with the 3D ball!
+  function setClonesOnlyMode(active) {
+    const isClones = Boolean(active);
+    animState.clonesOnlyMode = isClones;
+    root.visible = !isClones;
+    if (isClones) {
+      animState.friendsVisible = true;
+      animState.friendsTimer = 0.0; // Infinite duration while in Mochi Clones view!
+      animState.friendsRunningWild = true;
+      animState.friendsMischiefTriggered = true;
+      animState.clonesScolded = false;
+      animState.clonesScoldedTimer = 0.0;
+      friendsContainer.visible = true;
+      animState.ballState.x = 0.0;
+      animState.ballState.y = 0.85;
+      animState.ballState.z = 0.55;
+      animState.ballState.vx = 1.1;
+      animState.ballState.vy = 1.8;
+      animState.ballState.vz = -0.35;
+      for (const mf of miniFriends) {
+        mf.spawnProgress = Math.max(mf.spawnProgress, 0.25);
+      }
+      if (canPlaySfx(80)) {
+        playFriendsSpawnSound();
+      }
+    } else {
+      animState.friendsVisible = false;
+      animState.friendsRunningWild = false;
+      animState.clonesScolded = false;
+      animState.clonesScoldedTimer = 0.0;
+      animState.friendsTimer = 0.0;
+    }
+  }
+
+  // Scold the 5 clones ("agar mai inhe dat do to sidhe line me kahde ho jaye muh and akhe badi karake"):
+  // Immediately lines up all 5 clones in a straight row facing the viewer with huge wide eyes & wide-open shocked mouths!
+  function scoldClonesLineUp(duration = 14.0) {
+    if (!animState.friendsVisible) {
+      summonFriends(60.0);
+    }
+    animState.clonesScolded = true;
+    animState.clonesScoldedTimer = duration;
+    animState.friendsRunningWild = false;
+    animState.awaitingFriendDismissConfirm = false;
+    for (const mf of miniFriends) {
+      mf.boostTimer = 0.0;
+    }
+    // Roll the ball gently to the front-right corner and stop it
+    animState.ballState.vx = 0.0;
+    animState.ballState.vz = 0.0;
+    animState.ballState.vy = 0.5;
+    playScoldShockSound();
+    return true;
+  }
+
+  function releaseClonesToPlay() {
+    if (!animState.friendsVisible) {
+      summonFriends(60.0);
+    }
+    animState.clonesScolded = false;
+    animState.clonesScoldedTimer = 0.0;
+    animState.friendsRunningWild = true;
+    animState.ballState.vy = 1.9;
+    animState.ballState.vx = (Math.random() - 0.5) * 2.2;
+    animState.ballState.vz = (Math.random() - 0.5) * 1.4;
+    playBallKickSound(1.2);
+    return true;
+  }
+
+  function triggerCloneInteraction(cloneIdx) {
+    const idx = Math.abs(Number(cloneIdx) || 0) % miniFriends.length;
+    const mf = miniFriends[idx];
+    if (!mf) return null;
+
+    // Clicking a clone wakes it up for a playful trick (and releases scold mode if clicked)
+    animState.clonesScolded = false;
+    animState.clonesScoldedTimer = 0.0;
+    mf.boostDuration = 1.55;
+    mf.boostTimer = mf.boostDuration;
+    mf.activeTrick = mf.cfg.interactionType;
+
+    // Also kick the 3D ball playfully toward another clone!
+    const nextIdx = (idx + 1 + Math.floor(Math.random() * 3)) % miniFriends.length;
+    const targetClone = miniFriends[nextIdx];
+    if (targetClone) {
+      const dx = (targetClone.runOffsetX || targetClone.cfg.offsetX) - animState.ballState.x;
+      const dz = (targetClone.runOffsetZ || targetClone.cfg.offsetZ) - animState.ballState.z;
+      animState.ballState.vx = dx * 1.55;
+      animState.ballState.vz = dz * 1.55;
+      animState.ballState.vy = 2.1;
+      animState.ballState.targetCloneIdx = nextIdx;
+    }
+
+    playCloneUniqueSound(idx);
+
+    const replies = mf.cfg.replies || [];
+    const reply = replies.length > 0 ? replies[mf.replyCursor % replies.length] : `Yay! Main ${mf.cfg.name} hoon!`;
+    mf.replyCursor = (mf.replyCursor + 1) % Math.max(1, replies.length);
+
+    const cloneInfo = {
+      index: idx,
+      name: mf.cfg.name,
+      title: mf.cfg.title,
+      interactionType: mf.cfg.interactionType,
+      reply
+    };
+    if (typeof onCloneClickCallback === 'function') {
+      onCloneClickCallback(cloneInfo);
+    }
+    return cloneInfo;
+  }
+
+  function clickCloneMesh(hitObject) {
+    if (!hitObject || !animState.friendsVisible) return false;
+    let target = hitObject;
+    while (target) {
+      if (target.userData?.isCloneBall) {
+        // User clicked the 3D Play Ball directly — bounce it high and pass to a random clone!
+        animState.clonesScolded = false;
+        const randIdx = Math.floor(Math.random() * miniFriends.length);
+        const dest = miniFriends[randIdx];
+        animState.ballState.vx = ((dest?.runOffsetX || 0) - animState.ballState.x) * 1.8 + (Math.random() - 0.5) * 1.2;
+        animState.ballState.vz = ((dest?.runOffsetZ || 0) - animState.ballState.z) * 1.8 + (Math.random() - 0.5) * 1.0;
+        animState.ballState.vy = 2.65;
+        animState.ballState.targetCloneIdx = randIdx;
+        playBallKickSound(1.3);
+        return { type: 'ball' };
+      }
+      if (target.userData?.cloneIndex !== undefined) {
+        const info = triggerCloneInteraction(target.userData.cloneIndex);
+        return info || true;
+      }
+      target = target.parent;
+    }
+    return false;
   }
 
   function setWeatherState(weatherMode) {
@@ -1849,8 +2621,18 @@ export function createBlobCreature(options = {}) {
     animState.activeAction = null;
     animState.actionTimer = 0.0;
     animState.dryerActive = false;
+    animState.magicActive = false;
+    animState.magicTimer = 0.0;
     treatGroup.visible = false;
     dryerGroup.visible = false;
+    magicWandGroup.visible = false;
+    magicAuraRing.visible = false;
+    butterfliesContainer.visible = false;
+    selfieCameraGroup.visible = false;
+    peaceSignPawGroup.visible = false;
+    guitarGroup.visible = false;
+    dholGroup.visible = false;
+    musicNotesGroup.visible = false;
     animState.boopImpulse = 0.25;
     if (canPlaySfx(80)) {
       playMochiBoopSound(0.95);
@@ -1872,8 +2654,16 @@ export function createBlobCreature(options = {}) {
       dismissFriends();
       return;
     }
-    if (action === 'keep_friends') {
-      calmFriendsAndKeep();
+    if (action === 'keep_friends' || action === 'play_ball' || action === 'release_clones') {
+      if (animState.clonesScolded) {
+        releaseClonesToPlay();
+      } else {
+        calmFriendsAndKeep();
+      }
+      return;
+    }
+    if (action === 'scold_clones' || action === 'line_up_clones') {
+      scoldClonesLineUp(14.0);
       return;
     }
     if (action === 'bubbles') {
@@ -1897,11 +2687,80 @@ export function createBlobCreature(options = {}) {
       return;
     }
 
-    const safeDuration = Number.isFinite(duration) && duration > 0 ? Math.min(duration, 6.0) : 3.8;
+    const safeDuration = Number.isFinite(duration) && duration > 0 ? Math.min(duration, 8.0) : 4.2;
     animState.activeAction = action;
     animState.actionTimer = safeDuration;
 
     switch (action) {
+      case 'magic':
+      case 'butterflies':
+        animState.activeAction = 'magic';
+        animState.actionTimer = 6.5;
+        animState.magicActive = true;
+        animState.magicTimer = 6.5;
+        animState.boopImpulse = 0.75;
+        magicWandGroup.visible = true;
+        magicAuraRing.visible = true;
+        butterfliesContainer.visible = true;
+        emotionEngine.feedStimulus('play', 1.5);
+        if (canPlaySfx(80)) playMagicSpellSound();
+        break;
+      case 'selfie': {
+        animState.activeAction = 'selfie';
+        animState.actionTimer = 4.8;
+        animState.selfieFlashTimer = 0.95;
+        animState.boopImpulse = 0.74;
+        selfieCameraGroup.visible = true;
+        peaceSignPawGroup.visible = true;
+        // Cycle through hilarious 3D Selfie Prop Outfits (Oversized Star Glasses + Party Hat + Mustache, or Shades + Crown + Mustache)
+        const combo = animState.selfieComboIndex % 2;
+        animState.selfieComboIndex += 1;
+        if (combo === 0) {
+          animState.accessories.star_glasses = true;
+          animState.accessories.sunglasses = false;
+          animState.accessories.party_hat = true;
+          animState.accessories.crown = false;
+          animState.accessories.bowtie = true;
+          animState.accessories.mustache = true;
+        } else {
+          animState.accessories.star_glasses = false;
+          animState.accessories.sunglasses = true;
+          animState.accessories.party_hat = false;
+          animState.accessories.crown = true;
+          animState.accessories.bowtie = true;
+          animState.accessories.mustache = true;
+        }
+        starGlassesGroup.visible = animState.accessories.star_glasses;
+        glassesGroup.visible = animState.accessories.sunglasses;
+        partyHatGroup.visible = animState.accessories.party_hat;
+        crownGroup.visible = animState.accessories.crown;
+        bowtieGroup.visible = animState.accessories.bowtie;
+        mustacheGroup.visible = animState.accessories.mustache;
+        emotionEngine.feedStimulus('praise', 1.5);
+        if (canPlaySfx(80)) playCameraShutterSound();
+        break;
+      }
+      case 'guitar':
+      case 'concert':
+        animState.activeAction = 'guitar';
+        animState.actionTimer = 5.2;
+        animState.boopImpulse = 0.85;
+        guitarGroup.visible = true;
+        dholGroup.visible = false;
+        musicNotesGroup.visible = true;
+        emotionEngine.feedStimulus('dance', 1.5);
+        if (canPlaySfx(80)) playGuitarConcertSound();
+        break;
+      case 'dhol':
+        animState.activeAction = 'dhol';
+        animState.actionTimer = 5.2;
+        animState.boopImpulse = 0.92;
+        dholGroup.visible = true;
+        guitarGroup.visible = false;
+        musicNotesGroup.visible = true;
+        emotionEngine.feedStimulus('dance', 1.6);
+        if (canPlaySfx(80)) playDholBeatSound();
+        break;
       case 'dance':
         animState.boopImpulse = 0.85;
         animState.isPouting = false;
@@ -2135,6 +2994,118 @@ export function createBlobCreature(options = {}) {
       actSway = Math.sin(animState.time * 9.0) * 0.06 * s;
       actYawOffset = Math.sin(animState.time * 7.5) * 0.14;
       actSquash = 0.05 + Math.sin(animState.time * 12.0) * 0.03;
+    } else if (act === 'magic') {
+      // Smooth anti-gravity levitation & gentle fairy sway!
+      const magicFade = Math.min(1.0, animState.actionTimer / 0.8);
+      actHop = (0.36 + Math.sin(animState.time * 3.4) * 0.10) * s * magicFade;
+      actSway = Math.sin(animState.time * 2.2) * 0.08 * s * magicFade;
+      actTilt = Math.cos(animState.time * 2.2) * 0.09 * magicFade;
+    } else if (act === 'selfie') {
+      // Playful peace-sign head tilt & model pose!
+      actTilt = -0.18 + Math.sin(animState.time * 4.0) * 0.05;
+      actYawOffset = 0.14;
+      actHop = Math.abs(Math.sin(animState.time * 6.5)) * 0.05 * s;
+    } else if (act === 'guitar' || act === 'dhol') {
+      // Energetic concert rock / Bhangra bounce!
+      const beatFreq = act === 'dhol' ? 14.0 : 11.5;
+      actHop = Math.abs(Math.sin(animState.time * beatFreq)) * 0.16 * s;
+      actSway = Math.sin(animState.time * (beatFreq * 0.5)) * 0.14 * s;
+      actTilt = Math.sin(animState.time * (beatFreq * 0.5)) * 0.22;
+      actSquash = Math.sin(animState.time * beatFreq) * 0.09;
+    }
+
+    // Update 3D Magic Wand, Levitation Aura Ring & Orbiting Butterflies
+    if (act === 'magic') {
+      magicWandGroup.visible = true;
+      magicAuraRing.visible = true;
+      butterfliesContainer.visible = true;
+      butterfliesContainer.position.copy(anchorPos);
+
+      magicWandGroup.rotation.z = -0.38 + Math.sin(animState.time * 6.5) * 0.28;
+      magicWandGroup.rotation.x = 0.35 + Math.cos(animState.time * 5.0) * 0.18;
+      wandStarMesh.rotation.z = animState.time * 4.5;
+      magicAuraRing.rotation.y = animState.time * 2.8;
+      const auraPulse = 0.92 + Math.sin(animState.time * 6.0) * 0.12;
+      magicAuraRing.scale.setScalar(auraPulse);
+
+      for (let i = 0; i < butterflies.length; i++) {
+        const bf = butterflies[i];
+        const bAngle = bf.angle + animState.time * bf.speed;
+        const bx = Math.cos(bAngle) * bf.radius * s;
+        const by = (bf.heightOffset + 0.35 + Math.sin(animState.time * 3.8 + bf.phase) * 0.28) * s;
+        const bz = Math.sin(bAngle) * bf.radius * 0.8 * s + 0.2 * s;
+        bf.group.position.set(bx, by, bz);
+        bf.group.rotation.y = -bAngle + Math.PI * 0.5;
+        bf.group.scale.setScalar(s);
+
+        const flap = Math.sin(animState.time * 18.0 + bf.phase) * 0.78;
+        bf.leftWingPivot.rotation.z = flap;
+        bf.rightWingPivot.rotation.z = -flap;
+      }
+    } else {
+      magicWandGroup.visible = false;
+      magicAuraRing.visible = false;
+      butterfliesContainer.visible = false;
+    }
+
+    // Update 3D Selfie Camera, Peace-Sign Model Paw, Polaroid Print & Flash Burst
+    if (act === 'selfie') {
+      selfieCameraGroup.visible = true;
+      peaceSignPawGroup.visible = true;
+      selfieCameraGroup.position.y = 0.05 + Math.sin(animState.time * 5.5) * 0.03;
+      peaceSignPawGroup.position.y = 0.18 + Math.sin(animState.time * 7.5) * 0.045;
+      peaceSignPawGroup.rotation.z = -0.28 + Math.sin(animState.time * 6.5) * 0.12;
+      // Polaroid instant photo slides out smoothly after the shutter flash!
+      const elapsedSelfie = 4.8 - animState.actionTimer;
+      const slideOut = Math.min(1.0, Math.max(0.0, (elapsedSelfie - 0.35) * 1.4));
+      polaroidFrameGroup.position.y = -0.06 - slideOut * 0.22;
+      polaroidFrameGroup.scale.setScalar(0.001 + slideOut * 0.999);
+      if (animState.selfieFlashTimer > 0) {
+        animState.selfieFlashTimer = Math.max(0, animState.selfieFlashTimer - safeDt);
+        const flashWave = Math.sin((animState.selfieFlashTimer / 0.95) * Math.PI);
+        flashBurstMat.opacity = Math.min(0.96, flashWave * 1.4);
+        flashBurstMesh.scale.setScalar(0.6 + flashWave * 2.6);
+      } else {
+        flashBurstMat.opacity = 0.0;
+      }
+    } else {
+      selfieCameraGroup.visible = false;
+      peaceSignPawGroup.visible = false;
+      flashBurstMat.opacity = 0.0;
+    }
+
+    // Update 3D Rockstar Guitar, Festive Dhol & Floating Musical Notes
+    if (act === 'guitar' || act === 'dhol') {
+      guitarGroup.visible = act === 'guitar';
+      dholGroup.visible = act === 'dhol';
+      musicNotesGroup.visible = true;
+
+      if (act === 'guitar') {
+        guitarGroup.rotation.z = -0.45 + Math.sin(animState.time * 12.0) * 0.12;
+      } else if (act === 'dhol') {
+        dholGroup.rotation.z = 0.06 + Math.sin(animState.time * 14.0) * 0.09;
+        for (const st of dholSticks) {
+          st.pivot.rotation.z = st.side * (0.25 + Math.sin(animState.time * 18.0 + (st.side > 0 ? 0 : Math.PI)) * 0.45);
+        }
+      }
+
+      for (let n = 0; n < musicNotes.length; n++) {
+        const mn = musicNotes[n];
+        const nCycle = (animState.time * 0.65 + mn.phase) % 1.0;
+        const nAng = mn.angle + animState.time * 1.4;
+        mn.group.position.set(
+          Math.cos(nAng) * mn.radius,
+          -0.25 + nCycle * 1.55,
+          Math.sin(nAng) * mn.radius * 0.65 + 0.35
+        );
+        mn.group.rotation.y = Math.sin(animState.time * 4.0 + n) * 0.4;
+        const nScale = Math.sin(nCycle * Math.PI) * 1.15;
+        mn.group.scale.setScalar(Math.max(0.001, nScale));
+      }
+    } else {
+      guitarGroup.visible = false;
+      dholGroup.visible = false;
+      musicNotesGroup.visible = false;
     }
 
     // Update 3D Strawberry Cake Treat during 'feed'
@@ -2477,7 +3448,9 @@ export function createBlobCreature(options = {}) {
     const isLoving = act === 'love' || (act === 'feed' && animState.actionTimer < 1.3);
 
     for (const eye of eyes) {
-      eye.pivot.scale.set(eyeScaleX, blinkScaleY, 1.0);
+      // Cute one-eye model wink when striking a 3D Selfie Pose!
+      const eyeWinkY = (act === 'selfie' && eye.side === 1) ? 0.12 : blinkScaleY;
+      eye.pivot.scale.set(eyeScaleX, eyeWinkY, 1.0);
 
       const cryShimmerX = isCrying ? Math.sin(animState.time * 32.0 + eye.side) * 0.014 : 0.0;
       const cryShimmerY = isCrying ? Math.cos(animState.time * 28.0) * 0.014 : 0.0;
@@ -2569,12 +3542,31 @@ export function createBlobCreature(options = {}) {
     }
 
     // =========================================================================
-    // UPDATE MINI FRIENDS (Chintu, Pintu, Golu, Molu — spread out & running around!)
+    // UPDATE 5 MINI MOCHI CLONES + 3D PLAY BALL + SCOLDED STRAIGHT LINE-UP!
     // =========================================================================
+    if (animState.clonesOnlyMode) {
+      root.visible = false;
+      animState.friendsVisible = true;
+      if (!animState.clonesScolded) {
+        animState.friendsRunningWild = true;
+      }
+    }
+
+    if (animState.clonesScolded && animState.clonesScoldedTimer > 0) {
+      animState.clonesScoldedTimer -= safeDt;
+      if (animState.clonesScoldedTimer <= 0) {
+        animState.clonesScoldedTimer = 0.0;
+        animState.clonesScolded = false;
+        if (animState.clonesOnlyMode) {
+          animState.friendsRunningWild = true;
+        }
+      }
+    }
+
     if (animState.friendsVisible) {
       animState.friendsActiveTime += safeDt;
 
-      if (animState.friendsActiveTime >= 4.5 && !animState.friendsMischiefTriggered) {
+      if (!animState.clonesOnlyMode && !animState.clonesScolded && animState.friendsActiveTime >= 4.5 && !animState.friendsMischiefTriggered) {
         animState.friendsMischiefTriggered = true;
         animState.friendsRunningWild = true;
         animState.awaitingFriendDismissConfirm = true;
@@ -2583,7 +3575,7 @@ export function createBlobCreature(options = {}) {
         }
       }
 
-      if (animState.friendsTimer > 0) {
+      if (!animState.clonesOnlyMode && animState.friendsTimer > 0) {
         animState.friendsTimer -= safeDt;
         if (animState.friendsTimer <= 0) {
           animState.friendsTimer = 0.0;
@@ -2592,37 +3584,117 @@ export function createBlobCreature(options = {}) {
       }
     }
 
+    const isScolded = animState.clonesScolded;
+    const isUtpatOnly = animState.clonesOnlyMode;
+    const cloneScaleMult = isUtpatOnly ? 1.25 : 1.0;
+    const cosYaw = Math.cos(facingYaw);
+    const sinYaw = Math.sin(facingYaw);
+
     let anyFriendVisible = false;
     for (let i = 0; i < miniFriends.length; i++) {
       const mf = miniFriends[i];
       const targetSpawn = animState.friendsVisible ? 1.0 : 0.0;
       mf.spawnProgress += (targetSpawn - mf.spawnProgress) * Math.min(1.0, safeDt * 6.5);
 
+      if (mf.boostTimer > 0) {
+        mf.boostTimer = Math.max(0, mf.boostTimer - safeDt);
+      }
+
       if (mf.spawnProgress > 0.01) {
         anyFriendVisible = true;
         mf.group.visible = true;
         const cfg = mf.cfg;
         const p = mf.spawnProgress;
-        const friendScale = cfg.scale * s * p;
-        const fTime = animState.time * 5.2 + cfg.phaseOffset;
+        const friendScale = cfg.scale * cloneScaleMult * s * p;
+        const fTime = animState.time * 4.2 + cfg.phaseOffset;
 
-        const isRunning = animState.friendsRunningWild;
-        const targetRunX = isRunning ? Math.sin(animState.time * (2.6 + i * 0.45) + cfg.phaseOffset) * 0.62 : 0.0;
-        const targetRunZ = isRunning ? Math.cos(animState.time * (2.2 + i * 0.35) + cfg.phaseOffset) * 0.42 : 0.0;
-        mf.runOffsetX += (targetRunX - mf.runOffsetX) * Math.min(1.0, safeDt * 4.5);
-        mf.runOffsetZ += (targetRunZ - mf.runOffsetZ) * Math.min(1.0, safeDt * 4.5);
+        let targetX = cfg.offsetX;
+        let targetZ = cfg.offsetZ;
 
-        const isDancing = act === 'dance';
-        const hopAmp = isDancing ? 0.22 : (isRunning ? 0.16 : 0.09);
-        const hopFreq = isDancing ? animState.time * 11.5 : (isRunning ? animState.time * 9.5 : fTime);
-        const fHop = Math.abs(Math.sin(hopFreq + cfg.phaseOffset)) * hopAmp * s * p;
-        const fSway = Math.sin((isDancing ? animState.time * 5.75 : fTime * 0.5) + cfg.phaseOffset) * (isDancing ? 0.12 : 0.05) * s;
-        const fSquash = 1.0 + Math.sin(hopFreq * 2.0) * (isDancing || isRunning ? 0.14 : 0.06);
+        if (isScolded) {
+          // SCOLDED POSE ("agar mai inhe dat do to sidhe line me kahde ho jaye muh and akhe badi karake"):
+          // All 5 clones snap into a neat straight horizontal row facing the viewer!
+          targetX = (i - 2) * (isUtpatOnly ? 0.94 : 0.78);
+          targetZ = isUtpatOnly ? 0.42 : 1.25;
+          mf.runOffsetX += (targetX - mf.runOffsetX) * Math.min(1.0, safeDt * 9.5);
+          mf.runOffsetZ += (targetZ - mf.runOffsetZ) * Math.min(1.0, safeDt * 9.5);
+        } else if (isUtpatOnly) {
+          // Smooth roaming & chasing the 3D ball across the stage (with natural pauses, NO constant jumping!)
+          const isChasingBall = (animState.ballState.targetCloneIdx === i);
+          if (isChasingBall) {
+            targetX = Math.max(-2.1, Math.min(2.1, animState.ballState.x));
+            targetZ = Math.max(-1.15, Math.min(1.25, animState.ballState.z));
+          } else {
+            const speedA = 0.85 + i * 0.18;
+            const speedB = 0.68 + (4 - i) * 0.15;
+            const phase = cfg.phaseOffset + i * 1.25;
+            targetX = Math.sin(animState.time * speedA + phase) * 1.72 + Math.cos(animState.time * 0.55 - i) * 0.35;
+            targetZ = Math.cos(animState.time * speedB + phase * 0.8) * 0.98 + Math.sin(animState.time * 0.75 + i) * 0.25;
+          }
+          const prevX = mf.runOffsetX;
+          const prevZ = mf.runOffsetZ;
+          mf.runOffsetX += (targetX - mf.runOffsetX) * Math.min(1.0, safeDt * 3.4);
+          mf.runOffsetZ += (targetZ - mf.runOffsetZ) * Math.min(1.0, safeDt * 3.4);
+          mf.moveSpeed = Math.hypot(mf.runOffsetX - prevX, mf.runOffsetZ - prevZ) / Math.max(0.001, safeDt);
+        } else {
+          const isRunning = animState.friendsRunningWild;
+          const targetRunX = isRunning ? cfg.offsetX + Math.sin(animState.time * (1.4 + i * 0.25) + cfg.phaseOffset) * 0.48 : cfg.offsetX;
+          const targetRunZ = isRunning ? cfg.offsetZ + Math.cos(animState.time * (1.2 + i * 0.22) + cfg.phaseOffset) * 0.34 : cfg.offsetZ;
+          const prevX = mf.runOffsetX;
+          const prevZ = mf.runOffsetZ;
+          mf.runOffsetX += (targetRunX - mf.runOffsetX) * Math.min(1.0, safeDt * 3.8);
+          mf.runOffsetZ += (targetRunZ - mf.runOffsetZ) * Math.min(1.0, safeDt * 3.8);
+          mf.moveSpeed = Math.hypot(mf.runOffsetX - prevX, mf.runOffsetZ - prevZ) / Math.max(0.001, safeDt);
+        }
 
-        const cosYaw = Math.cos(facingYaw);
-        const sinYaw = Math.sin(facingYaw);
-        const localX = (cfg.offsetX + mf.runOffsetX) * s * p + fSway;
-        const localZ = (cfg.offsetZ + mf.runOffsetZ) * s * p;
+        // Compute distinct playful click interaction (Somersault, Tornado Spin, Belly Bounce, Cartwheel, Backflip)
+        let trickHop = 0.0;
+        let trickRotX = 0.0;
+        let trickRotY = 0.0;
+        let trickRotZ = 0.0;
+        let trickSquash = 1.0;
+
+        if (mf.boostTimer > 0 && !isScolded) {
+          const prog = 1.0 - (mf.boostTimer / Math.max(0.1, mf.boostDuration || 1.55));
+          const arc = Math.sin(prog * Math.PI);
+          if (mf.activeTrick === 'somersault') {
+            // Chintu: High leap + full 720-degree front somersault!
+            trickHop = arc * 0.88;
+            trickRotX = prog * Math.PI * 4.0;
+          } else if (mf.activeTrick === 'tornado_spin') {
+            // Pintu: Helicopter star leap + rapid 1080-degree spin!
+            trickHop = arc * 0.76;
+            trickRotY = prog * Math.PI * 6.0;
+            trickRotZ = Math.sin(prog * Math.PI * 4.0) * 0.32;
+          } else if (mf.activeTrick === 'belly_bounce') {
+            // Golu: Elastic triple jelly belly-bounce!
+            trickHop = Math.abs(Math.sin(prog * Math.PI * 3.0)) * 0.65;
+            trickSquash = 1.0 + Math.cos(prog * Math.PI * 6.0) * 0.32;
+          } else if (mf.activeTrick === 'cartwheel') {
+            // Molu: Sideways 360-degree cartwheel barrel roll!
+            trickHop = arc * 0.68;
+            trickRotZ = prog * Math.PI * 2.0;
+          } else if (mf.activeTrick === 'backflip') {
+            // Bholu: Snappy backflip with happy wiggle!
+            trickHop = arc * 0.85;
+            trickRotX = -prog * Math.PI * 2.0;
+          }
+        }
+
+        // Gentle ground waddle when moving — NO constant non-stop jumping ("aur har time kudate na rahe")!
+        const walkStep = isScolded
+          ? 0.0
+          : Math.abs(Math.sin(animState.time * 7.2 + cfg.phaseOffset)) * Math.min(0.038, (mf.moveSpeed || 0) * 0.024);
+        const fHop = (walkStep + trickHop) * s * p;
+
+        // Tiny nervous shiver when scolded in a line; gentle waddle sway when walking
+        const shiverX = isScolded ? Math.sin(animState.time * 38.0 + i) * 0.012 * s : 0.0;
+        const fSquash = isScolded
+          ? 1.05
+          : trickSquash * (1.0 + Math.sin(animState.time * 7.2 + cfg.phaseOffset) * 0.035);
+
+        const localX = mf.runOffsetX * s * p + shiverX;
+        const localZ = mf.runOffsetZ * s * p;
         const worldOffsetX = localX * cosYaw + localZ * sinYaw;
         const worldOffsetZ = -localX * sinYaw + localZ * cosYaw;
 
@@ -2639,18 +3711,169 @@ export function createBlobCreature(options = {}) {
           (1.0 / Math.sqrt(fSquash)) * friendScale
         );
 
-        const runTurnYaw = isRunning ? Math.cos(animState.time * (2.6 + i * 0.45) + cfg.phaseOffset) * 0.55 : 0.0;
-        mf.group.rotation.y = facingYaw + cfg.yaw + runTurnYaw + Math.sin(fTime * 0.7) * 0.15;
-        mf.group.rotation.z = Math.sin(fTime * 0.5) * (isDancing || isRunning ? 0.28 : 0.12);
-        mf.group.rotation.x = facingPitch + talkNod * 0.8;
+        if (isScolded) {
+          // Face straight toward the camera at attention!
+          mf.group.rotation.y = facingYaw;
+          mf.group.rotation.x = facingPitch;
+          mf.group.rotation.z = Math.sin(animState.time * 32.0 + i) * 0.025;
+        } else {
+          // Face toward the ball or walking direction smoothly
+          const dxBall = animState.ballState.x - mf.runOffsetX;
+          const dzBall = animState.ballState.z - mf.runOffsetZ;
+          const lookBallYaw = Math.atan2(dxBall, dzBall) * 0.45;
+          mf.group.rotation.y = facingYaw + lookBallYaw + trickRotY;
+          mf.group.rotation.z = Math.sin(animState.time * 7.2 + cfg.phaseOffset) * 0.09 + trickRotZ;
+          mf.group.rotation.x = facingPitch + talkNod * 0.5 + trickRotX;
+        }
 
-        for (const fEye of mf.eyes) {
-          fEye.scale.y = blinkScaleY;
+        // Facial expression: When scolded -> HUGE wide eyes & BIG open "O" mouth ("muh and akhe badi karake")!
+        if (isScolded) {
+          for (const fEye of mf.eyes) {
+            fEye.scale.set(1.62, 1.72 * Math.max(0.85, blinkScaleY), 1.35);
+          }
+          if (mf.smileArcs) {
+            for (const arc of mf.smileArcs) arc.visible = false;
+          }
+          if (mf.openMouth) {
+            mf.openMouth.visible = true;
+            const pulse = 1.0 + Math.sin(animState.time * 18.0 + i) * 0.08;
+            mf.openMouth.scale.set(1.62 * pulse, 1.85 * pulse, 1.25);
+          }
+        } else {
+          const isExcited = mf.boostTimer > 0;
+          for (const fEye of mf.eyes) {
+            const eyeScale = isExcited ? 1.22 : 1.0;
+            fEye.scale.set(eyeScale, eyeScale * blinkScaleY, eyeScale);
+          }
+          if (mf.smileArcs) {
+            for (const arc of mf.smileArcs) arc.visible = !isExcited;
+          }
+          if (mf.openMouth) {
+            mf.openMouth.visible = isExcited;
+            if (isExcited) {
+              mf.openMouth.scale.set(1.25, 1.35, 1.1);
+            }
+          }
         }
       } else {
         mf.group.visible = false;
       }
     }
+
+    // Update 3D Play Ball physics & clone passing ("isme ball bhi banao")
+    if (anyFriendVisible) {
+      cloneBallGroup.visible = true;
+      const bState = animState.ballState;
+      if (bState.kickCooldown > 0) {
+        bState.kickCooldown = Math.max(0, bState.kickCooldown - safeDt);
+      }
+
+      if (isScolded) {
+        // When scolded, the ball rests quietly to the side while clones stand in a line
+        const restX = 1.45;
+        const restZ = 0.95;
+        bState.x += (restX - bState.x) * Math.min(1.0, safeDt * 4.0);
+        bState.z += (restZ - bState.z) * Math.min(1.0, safeDt * 4.0);
+        bState.y = Math.max(ballRadius, bState.y - safeDt * 3.5);
+        bState.vx = 0;
+        bState.vy = 0;
+        bState.vz = 0;
+      } else {
+        // Gravity + bounce + floor rolling
+        bState.vy -= 5.8 * safeDt;
+        bState.x += bState.vx * safeDt;
+        bState.y += bState.vy * safeDt;
+        bState.z += bState.vz * safeDt;
+
+        // Floor bounce
+        if (bState.y <= ballRadius) {
+          bState.y = ballRadius;
+          if (Math.abs(bState.vy) > 0.45) {
+            bState.vy = Math.abs(bState.vy) * 0.68;
+          } else {
+            bState.vy = 0.0;
+          }
+          bState.vx *= Math.pow(0.92, safeDt * 60);
+          bState.vz *= Math.pow(0.92, safeDt * 60);
+        }
+
+        // Soft stage bounds
+        const maxBoundX = isUtpatOnly ? 2.05 : 2.15;
+        const maxBoundZ = 1.35;
+        const minBoundZ = isUtpatOnly ? -1.05 : -0.45;
+        if (bState.x > maxBoundX) { bState.x = maxBoundX; bState.vx = -Math.abs(bState.vx) * 0.85; }
+        if (bState.x < -maxBoundX) { bState.x = -maxBoundX; bState.vx = Math.abs(bState.vx) * 0.85; }
+        if (bState.z > maxBoundZ) { bState.z = maxBoundZ; bState.vz = -Math.abs(bState.vz) * 0.85; }
+        if (bState.z < minBoundZ) { bState.z = minBoundZ; bState.vz = Math.abs(bState.vz) * 0.85; }
+
+        // Check if any clone is close enough to kick/pass the ball to another clone!
+        if (bState.kickCooldown <= 0) {
+          for (let i = 0; i < miniFriends.length; i++) {
+            const mf = miniFriends[i];
+            if (mf.spawnProgress < 0.7) continue;
+            const dist = Math.hypot(bState.x - mf.runOffsetX, bState.z - mf.runOffsetZ);
+            if (dist < 0.52 && bState.y < 0.65) {
+              const nextTarget = (i + 1 + Math.floor(Math.random() * (miniFriends.length - 1))) % miniFriends.length;
+              const receiver = miniFriends[nextTarget];
+              const rx = receiver ? receiver.runOffsetX : 0.0;
+              const rz = receiver ? receiver.runOffsetZ : 0.5;
+              const passDx = rx - bState.x;
+              const passDz = rz - bState.z;
+              bState.vx = passDx * 1.45 + (Math.random() - 0.5) * 0.45;
+              bState.vz = passDz * 1.45 + (Math.random() - 0.5) * 0.45;
+              bState.vy = 1.75 + Math.random() * 0.65;
+              bState.targetCloneIdx = nextTarget;
+              bState.kickCooldown = 0.65;
+              if (canPlaySfx(240)) {
+                playBallKickSound(0.95 + i * 0.08);
+              }
+              break;
+            }
+          }
+        }
+
+        // If ball almost stops, give it a gentle nudge toward a clone so play continues smoothly
+        if (Math.hypot(bState.vx, bState.vz) < 0.15 && bState.y <= ballRadius + 0.02 && bState.kickCooldown <= 0) {
+          const nextIdx = (bState.targetCloneIdx + 1) % miniFriends.length;
+          const dest = miniFriends[nextIdx];
+          if (dest) {
+            bState.vx = (dest.runOffsetX - bState.x) * 1.25;
+            bState.vz = (dest.runOffsetZ - bState.z) * 1.25;
+            bState.vy = 1.35;
+            bState.targetCloneIdx = nextIdx;
+            bState.kickCooldown = 0.7;
+          }
+        }
+
+        // Realistic rolling rotation
+        cloneBallMesh.rotation.z -= bState.vx * safeDt * 3.8;
+        cloneBallMesh.rotation.x += bState.vz * safeDt * 3.8;
+      }
+
+      const ballScale = (isUtpatOnly ? 1.18 : 0.95) * s;
+      const worldBallX = (bState.x * cosYaw + bState.z * sinYaw) * s;
+      const worldBallZ = (-bState.x * sinYaw + bState.z * cosYaw) * s;
+      const floorY = anchorPos.y - 0.94 * s;
+
+      cloneBallMesh.position.set(
+        anchorPos.x + worldBallX,
+        floorY + bState.y * ballScale,
+        anchorPos.z + worldBallZ
+      );
+      cloneBallMesh.scale.setScalar(ballScale);
+
+      cloneBallShadow.position.set(
+        anchorPos.x + worldBallX,
+        floorY + 0.012,
+        anchorPos.z + worldBallZ
+      );
+      const heightRatio = Math.max(0.0, Math.min(1.0, (bState.y - ballRadius) / 1.5));
+      cloneBallShadow.scale.setScalar(ballScale * (1.0 - heightRatio * 0.45));
+      ballShadowMat.opacity = 0.28 * (1.0 - heightRatio * 0.6);
+    } else {
+      cloneBallGroup.visible = false;
+    }
+
     friendsContainer.visible = anyFriendVisible;
 
     // =========================================================================
@@ -2807,6 +4030,7 @@ export function createBlobCreature(options = {}) {
     soldiersContainer,
     rainContainer,
     bubblesContainer,
+    butterfliesContainer,
     bodyMesh,
     bodyGeometry,
     skinMaterial,
@@ -2821,6 +4045,13 @@ export function createBlobCreature(options = {}) {
     summonFriends,
     dismissFriends,
     calmFriendsAndKeep,
+    setClonesOnlyMode,
+    scoldClonesLineUp,
+    releaseClonesToPlay,
+    triggerCloneInteraction,
+    clickCloneMesh,
+    isClonesOnlyMode: () => animState.clonesOnlyMode,
+    isClonesScolded: () => animState.clonesScolded,
     summonSoldiers,
     triggerSoldiersFight,
     dismissSoldiers,
@@ -2836,6 +4067,7 @@ export function createBlobCreature(options = {}) {
     setOnPoutDeflate: (cb) => { onPoutDeflateCallback = cb; },
     setOnFriendsMischief: (cb) => { onFriendsMischiefCallback = cb; },
     setOnWetShake: (cb) => { onWetShakeCallback = cb; },
+    setOnCloneClick: (cb) => { onCloneClickCallback = cb; },
     placeAt,
     resetPlacement,
     isPlaced: () => isPlaced,

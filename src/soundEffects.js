@@ -921,7 +921,290 @@ export function playSoldierCheerSound() {
   } catch (e) {}
 }
 
+export function playMagicSpellSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Sparkling fairy harp upward glissando + wand chime
+    const magicNotes = [587.33, 659.25, 783.99, 987.77, 1174.66, 1318.5, 1567.98, 2093.0];
+    magicNotes.forEach((freq, i) => {
+      const t = now + i * 0.055;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.06, t + 0.24);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(0.22, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.3);
+    });
+    // Cute Mochi "Abracadabra~!" vocal coo
+    playSyllable(ctx, {
+      startTime: now + 0.38,
+      duration: 0.2,
+      f0Start: 780,
+      f0End: 1320,
+      formantFreq: 2350,
+      gainPeak: 0.36,
+      type: 'sine',
+      vibratoDepth: 18
+    });
+    triggerVocalMouthBounce(0.75, 680);
+  } catch (e) {}
+}
+
+export function playCameraShutterSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Double mechanical shutter click (" Ka-Chik! ")
+    const clickTimes = [0.0, 0.065];
+    clickTimes.forEach((offset, idx) => {
+      const t = now + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(idx === 0 ? 1800 : 2600, t);
+      osc.frequency.exponentialRampToValueAtTime(240, t + 0.035);
+      gain.gain.setValueAtTime(0.35, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.045);
+    });
+    // Cute "Cheese~!" pose squeak after flash
+    playSyllable(ctx, {
+      startTime: now + 0.14,
+      duration: 0.18,
+      f0Start: 860,
+      f0End: 1280,
+      formantFreq: 2400,
+      gainPeak: 0.38,
+      type: 'sine',
+      vibratoDepth: 15
+    });
+    triggerVocalMouthBounce(0.7, 450);
+  } catch (e) {}
+}
+
+export function playGuitarConcertSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Upbeat strummed guitar chords (C major -> G major -> Am -> F major -> C major)
+    const chords = [
+      { time: 0.0, notes: [261.63, 329.63, 392.0, 523.25] },
+      { time: 0.42, notes: [196.0, 246.94, 392.0, 587.33] },
+      { time: 0.84, notes: [220.0, 261.63, 329.63, 440.0] },
+      { time: 1.26, notes: [174.61, 261.63, 349.23, 523.25] },
+      { time: 1.68, notes: [261.63, 329.63, 392.0, 659.25] }
+    ];
+    chords.forEach((chord) => {
+      chord.notes.forEach((freq, stringIdx) => {
+        const t = now + chord.time + stringIdx * 0.022;
+        const osc = ctx.createOscillator();
+        const filter = ctx.createBiquadFilter();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, t);
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(2200, t);
+        filter.frequency.exponentialRampToValueAtTime(650, t + 0.36);
+        gain.gain.setValueAtTime(0.001, t);
+        gain.gain.linearRampToValueAtTime(0.14, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.4);
+      });
+    });
+    triggerVocalMouthBounce(0.85, 2100);
+  } catch (e) {}
+}
+
+export function playDholBeatSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Festive Punjabi Bhangra Dhol rhythm ("Dha - Ge - Na - Tin - Na - Ka - Dhin - Dha!")
+    const beats = [
+      { t: 0.0, bass: true, treble: true },
+      { t: 0.24, bass: false, treble: true },
+      { t: 0.38, bass: true, treble: false },
+      { t: 0.62, bass: true, treble: true },
+      { t: 0.88, bass: false, treble: true },
+      { t: 1.04, bass: true, treble: false },
+      { t: 1.24, bass: true, treble: true },
+      { t: 1.48, bass: true, treble: true },
+      { t: 1.72, bass: false, treble: true },
+      { t: 1.92, bass: true, treble: true }
+    ];
+    beats.forEach((b) => {
+      const t = now + b.t;
+      if (b.bass) {
+        // Deep resonant Dagga (bass skin) thump
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(145, t);
+        osc.frequency.exponentialRampToValueAtTime(58, t + 0.16);
+        gain.gain.setValueAtTime(0.45, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.2);
+      }
+      if (b.treble) {
+        // Sharp wooden Tilli slap on high-pitched skin
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(420, t);
+        osc2.frequency.exponentialRampToValueAtTime(210, t + 0.065);
+        gain2.gain.setValueAtTime(0.32, t);
+        gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.075);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(t);
+        osc2.stop(t + 0.08);
+      }
+    });
+    triggerVocalMouthBounce(0.9, 2100);
+  } catch (e) {}
+}
+
+export function playPandaCuteSound(pandaIndex = 0) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Each of the 5 pandas (Bambam, Coco, Dumpling, Pogo, Miso) has its own cute vocal melody!
+    const melodies = [
+      [659.25, 783.99, 1046.5, 1318.5], // Bambam: playful somersault arpeggio
+      [740.0, 987.77, 1174.66, 1480.0], // Coco: sweet high-pitched heart coo
+      [523.25, 659.25, 587.33, 880.0],  // Dumpling: bouncy tummy-pat rhythm
+      [587.33, 880.0, 1174.66, 1760.0], // Pogo: high boing jump glissando
+      [880.0, 1046.5, 659.25, 1318.5]   // Miso: cute baby "Achoo~!" squeak + giggle
+    ];
+    const notes = melodies[Math.abs(pandaIndex) % melodies.length];
+    notes.forEach((freq, i) => {
+      playSyllable(ctx, {
+        startTime: now + i * 0.085,
+        duration: 0.13,
+        f0Start: freq * 0.92,
+        f0End: freq * 1.18,
+        formantFreq: 2250,
+        gainPeak: 0.38,
+        type: i % 2 === 0 ? 'sine' : 'triangle',
+        vibratoDepth: 14
+      });
+    });
+    triggerVocalMouthBounce(0.8, 520);
+  } catch (e) {}
+}
+
+export function playCloneUniqueSound(cloneIndex = 0) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // 5 distinct high-pitched cartoon baby vocal melodies for Chintu, Pintu, Golu, Molu, Bholu!
+    const cloneMelodies = [
+      // 0: Chintu (Somersault champ - rapid rising heroic squeak!)
+      [680, 880, 1120, 1480],
+      // 1: Pintu (Tornado spinner - bubbly arpeggio!)
+      [760, 960, 1240, 960, 1520],
+      // 2: Golu (Belly-bouncer - bouncy playful boing-giggle!)
+      [540, 820, 620, 980],
+      // 3: Molu (Cartwheel star - whistling sweet chirp!)
+      [840, 1180, 1020, 1420],
+      // 4: Bholu (Backflip baby - excited triple giggle!)
+      [720, 1040, 880, 1360]
+    ];
+    const notes = cloneMelodies[Math.abs(cloneIndex) % cloneMelodies.length];
+    notes.forEach((freq, i) => {
+      playSyllable(ctx, {
+        startTime: now + i * 0.075,
+        duration: 0.11,
+        f0Start: freq * 0.94,
+        f0End: freq * 1.22,
+        formantFreq: 2300,
+        gainPeak: 0.36,
+        type: i % 2 === 0 ? 'sine' : 'triangle',
+        vibratoDepth: 16
+      });
+    });
+    triggerVocalMouthBounce(0.8, 460);
+  } catch (e) {}
+}
+
+export function playBallKickSound(pitch = 1.0) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(160 * pitch, now);
+    osc.frequency.exponentialRampToValueAtTime(340 * pitch, now + 0.065);
+    osc.frequency.exponentialRampToValueAtTime(120 * pitch, now + 0.14);
+    gain.gain.setValueAtTime(0.26, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.16);
+  } catch (e) {}
+}
+
+export function playScoldShockSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Cartoon "Gasp / Attention!" chime when clones snap into a straight line with wide eyes & open mouths!
+    const chord = [880, 1174.66, 1396.91];
+    chord.forEach((freq, idx) => {
+      playSyllable(ctx, {
+        startTime: now + idx * 0.03,
+        duration: 0.22,
+        f0Start: freq * 0.85,
+        f0End: freq * 1.25,
+        formantFreq: 2500,
+        gainPeak: 0.32,
+        type: 'triangle',
+        vibratoDepth: 22
+      });
+    });
+    triggerVocalMouthBounce(0.85, 500);
+  } catch (e) {}
+}
+
 export function getActiveVocalEnvelope() {
   return activeVocalEnvelope;
 }
+
+
+
 

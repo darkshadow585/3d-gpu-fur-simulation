@@ -98,11 +98,17 @@ scene.add(creature.root);
 if (creature.friendsContainer) {
   scene.add(creature.friendsContainer);
 }
+if (creature.soldiersContainer) {
+  scene.add(creature.soldiersContainer);
+}
 if (creature.rainContainer) {
   scene.add(creature.rainContainer);
 }
 if (creature.bubblesContainer) {
   scene.add(creature.bubblesContainer);
+}
+if (creature.butterfliesContainer) {
+  scene.add(creature.butterfliesContainer);
 }
 
 const gpuPhysics = createGPUFurPhysics(renderer);
@@ -199,6 +205,9 @@ function applyEnvironmentPreset(envId) {
   }
 
   const envPreset = envManager.setEnvironment(envId);
+  if (typeof creature !== 'undefined' && creature.setClonesOnlyMode) {
+    creature.setClonesOnlyMode(envId === 'clones');
+  }
   const u = furSystem.sharedUniforms;
   if (envPreset) {
     if (envPreset.keyColor !== undefined) {
@@ -215,13 +224,99 @@ function applyEnvironmentPreset(envId) {
   if (hudHint) {
     if (envId === 'ar') {
       hudHint.textContent = 'AR Active: Tap screen to place Mochi · Click Mochi to talk/stop · Drag to orbit';
+    } else if (envId === 'clones') {
+      hudHint.textContent = '✨ Mochi Clones: Click any clone for a unique trick & voice · Click the 3D Ball · Scold them to stand in a line!';
     } else {
-      hudHint.textContent = '👆 Click Mochi-Puff (the doll) to talk with Gemini 3.8 Live · Click again to stop';
+      hudHint.textContent = '👆 Click Mochi-Puff (Topper + Live Search!) to talk · Click again to stop';
     }
   }
+  syncClonesActionBar(envId === 'clones');
 }
 
-const ALLOWED_ENV_IDS = new Set(['studio', 'meadow', 'highrise', 'ar']);
+function syncClonesActionBar(visible) {
+  if (typeof document === 'undefined') return;
+  let bar = document.getElementById('clones-action-bar');
+  if (!visible) {
+    if (bar) bar.style.display = 'none';
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'clones-action-bar';
+    Object.assign(bar.style, {
+      position: 'fixed',
+      bottom: '54px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      display: 'flex',
+      gap: '8px',
+      padding: '6px 10px',
+      borderRadius: '999px',
+      background: 'rgba(15, 20, 32, 0.84)',
+      backdropFilter: 'blur(12px)',
+      border: '1px solid rgba(255, 255, 255, 0.16)',
+      boxShadow: '0 8px 28px rgba(0, 0, 0, 0.45)',
+      zIndex: '45'
+    });
+
+    const makeBtn = (label, bg, onClick) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      Object.assign(btn.style, {
+        border: 'none',
+        borderRadius: '999px',
+        padding: '7px 14px',
+        fontSize: '12px',
+        fontWeight: '700',
+        color: '#ffffff',
+        background: bg,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        transition: 'transform 0.15s ease'
+      });
+      btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onClick(btn);
+      });
+      return btn;
+    };
+
+    const scoldBtn = makeBtn('😤 Daato! (Line Me Khade Ho)', 'linear-gradient(135deg, #e11d48, #f43f5e)', () => {
+      if (voiceAssistant && voiceAssistant.triggerScoldClonesSpeech) {
+        voiceAssistant.triggerScoldClonesSpeech();
+      } else if (creature && creature.scoldClonesLineUp) {
+        creature.scoldClonesLineUp(14.0);
+      }
+    });
+
+    const playBtn = makeBtn('⚽ Ball Khelo', 'linear-gradient(135deg, #0284c7, #38bdf8)', () => {
+      if (creature && creature.releaseClonesToPlay) {
+        creature.releaseClonesToPlay();
+      }
+      if (hudHint) {
+        hudHint.textContent = '⚽ Chintu, Pintu, Golu, Molu, Bholu are playing with their 3D Ball!';
+      }
+    });
+
+    const micBtn = makeBtn('🎙️ Bol Ke Daato / Baat Karo', 'linear-gradient(135deg, #7c3aed, #a855f7)', (btn) => {
+      if (voiceAssistant && voiceAssistant.toggleSpeechListening) {
+        voiceAssistant.toggleSpeechListening();
+        const active = voiceAssistant.isListening && voiceAssistant.isListening();
+        btn.textContent = active ? '🛑 Mic ON (Bol Ke Daato!)' : '🎙️ Bol Ke Daato / Baat Karo';
+      }
+    });
+
+    bar.appendChild(scoldBtn);
+    bar.appendChild(playBtn);
+    bar.appendChild(micBtn);
+    document.body.appendChild(bar);
+  }
+  bar.style.display = 'flex';
+}
+
+const ALLOWED_ENV_IDS = new Set(['studio', 'meadow', 'highrise', 'ar', 'clones']);
 const urlEnvParam = new URLSearchParams(window.location.search).get('env');
 const initialEnvId = urlEnvParam && ALLOWED_ENV_IDS.has(urlEnvParam) ? urlEnvParam : simState.environment;
 applyEnvironmentPreset(initialEnvId);
@@ -337,6 +432,14 @@ const ui = createMinimalUI(uiContainer, simState, (key, value) => {
         hudHint.textContent = 'Mochi reset to center position · Tap screen to place on detected surface';
       }
       break;
+    case 'triggerAction': {
+      if (typeof voiceAssistant !== 'undefined' && voiceAssistant && voiceAssistant.executeCreatureAction) {
+        voiceAssistant.executeCreatureAction(value);
+      } else if (creature && creature.playAction) {
+        creature.playAction(value);
+      }
+      break;
+    }
     default:
       break;
   }
@@ -427,6 +530,7 @@ function isEventOnUIOverlay(e) {
     (e.target.closest('#ui-root') ||
       e.target.closest('#page-nav') ||
       e.target.closest('#scene-nav') ||
+      e.target.closest('#clones-action-bar') ||
       e.target.closest('#mobile-controls-btn') ||
       e.target.closest('#mobile-sheet-backdrop'))
   );
@@ -441,8 +545,8 @@ window.addEventListener('pointermove', (e) => {
   pointerNDC.y = -(e.clientY / window.innerHeight) * 2.0 + 1.0;
 
   raycaster.setFromCamera(pointerNDC, camera);
-  // Intersect ONLY creature core bodyMesh — avoids outer 64 fur shells or strands intercepting distant hovering!
-  const hits = raycaster.intersectObject(creature.bodyMesh, false);
+  // Intersect ONLY creature core bodyMesh when Big Mochi is visible!
+  const hits = (creature.root && creature.root.visible) ? raycaster.intersectObject(creature.bodyMesh, false) : [];
   if (hits.length > 0) {
     prevPointerLocalPos.copy(pointerLocalPos);
     pointerLocalPos.copy(hits[0].point);
@@ -470,36 +574,66 @@ window.addEventListener('pointermove', (e) => {
   } else {
     isPointerOverCreature = false;
     pointerVelocity.multiplyScalar(0.4);
-    container.style.cursor = 'grab';
+    let hoveringClone = false;
+    if (creature.friendsContainer && creature.friendsContainer.visible) {
+      const fHits = raycaster.intersectObject(creature.friendsContainer, true);
+      if (fHits.length > 0) hoveringClone = true;
+    }
+    container.style.cursor = hoveringClone ? 'pointer' : 'grab';
     if (simState.environment === 'ar' && tapToPlaceEnabled) {
       envManager.updateARCursor(pointerNDC.x, pointerNDC.y, true);
     }
   }
 });
 
+let wasPointerOnDollAtDown = false;
+const dollScreenProjTmp = new THREE.Vector3();
+
+function checkIsPointerNearDoll(ndcX, ndcY) {
+  if (!creature || !creature.root || !creature.root.visible) return false;
+  raycaster.setFromCamera({ x: ndcX, y: ndcY }, camera);
+  const hits = creature.bodyMesh ? raycaster.intersectObject(creature.bodyMesh, false) : [];
+  if (hits.length > 0) return true;
+
+  // Also check screen-space silhouette around Mochi's 3D position so clicking on outer GPU fur, ears, or crown always works!
+  if (creature && creature.root) {
+    dollScreenProjTmp.copy(creature.root.position);
+    dollScreenProjTmp.y += 0.08 * (creature.animState?.baseScale || 1.0);
+    dollScreenProjTmp.project(camera);
+    const s = creature.animState?.baseScale || 1.0;
+    const hitRadiusNDC = 0.34 * Math.max(0.45, s);
+    const distNDC = Math.hypot(ndcX - dollScreenProjTmp.x, ndcY - dollScreenProjTmp.y);
+    if (distNDC < hitRadiusNDC) return true;
+  }
+  return false;
+}
+
 window.addEventListener('pointerdown', (e) => {
   pointerDownPos.x = e.clientX;
   pointerDownPos.y = e.clientY;
+  wasPointerOnDollAtDown = false;
   if (isEventOnUIOverlay(e)) {
     return;
   }
-  if (isPointerOverCreature) {
+  const ndcX = (e.clientX / window.innerWidth) * 2.0 - 1.0;
+  const ndcY = -(e.clientY / window.innerHeight) * 2.0 + 1.0;
+  wasPointerOnDollAtDown = isPointerOverCreature || checkIsPointerNearDoll(ndcX, ndcY);
+  if (wasPointerOnDollAtDown) {
     controls.enabled = false;
   }
 });
 
 window.addEventListener('pointerup', (e) => {
   controls.enabled = true;
+  if (isEventOnUIOverlay(e)) {
+    return;
+  }
   const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
-  if (moveDist < 12) {
-    if (isEventOnUIOverlay(e)) {
-      return;
-    }
-    // Verify raycast on exact click location directly against bubbles, bodyMesh, or mini friends
-    pointerNDC.x = (e.clientX / window.innerWidth) * 2.0 - 1.0;
-    pointerNDC.y = -(e.clientY / window.innerHeight) * 2.0 + 1.0;
-    raycaster.setFromCamera(pointerNDC, camera);
+  pointerNDC.x = (e.clientX / window.innerWidth) * 2.0 - 1.0;
+  pointerNDC.y = -(e.clientY / window.innerHeight) * 2.0 + 1.0;
+  raycaster.setFromCamera(pointerNDC, camera);
 
+  if (moveDist < 28) {
     // 1. Check if user tapped/clicked a floating 3D soap bubble to POP it!
     if (creature.bubblesContainer && creature.bubblesContainer.visible && creature.popBubbleMesh) {
       const bubbleHits = raycaster.intersectObject(creature.bubblesContainer, true);
@@ -509,21 +643,31 @@ window.addEventListener('pointerup', (e) => {
       }
     }
 
-    const targets = [creature.bodyMesh, creature.root].filter(Boolean);
-    const hits = targets.length > 0 ? raycaster.intersectObjects(targets, true) : [];
-    const isDollClicked = hits.length > 0 || isPointerOverCreature;
+    const isDollClicked = wasPointerOnDollAtDown || isPointerOverCreature || checkIsPointerNearDoll(pointerNDC.x, pointerNDC.y);
 
-    // 2. Also check if user clicked one of the 4 mini friends (Chintu, Pintu, Golu, Molu)!
-    let isFriendClicked = false;
+    // 2. Also check if user clicked one of the 5 mini Mochi clones, the 3D Play Ball, or royal soldiers!
+    let isCloneOrBallClicked = false;
+    let isSoldierClicked = false;
     if (!isDollClicked && creature.friendsContainer && creature.friendsContainer.visible) {
       const friendHits = raycaster.intersectObject(creature.friendsContainer, true);
       if (friendHits.length > 0) {
-        isFriendClicked = true;
+        if (creature.clickCloneMesh) {
+          creature.clickCloneMesh(friendHits[0].object);
+        }
+        isCloneOrBallClicked = true;
+      }
+    }
+    if (!isDollClicked && !isCloneOrBallClicked && creature.soldiersContainer && creature.soldiersContainer.visible) {
+      const soldierHits = raycaster.intersectObject(creature.soldiersContainer, true);
+      if (soldierHits.length > 0) {
+        isSoldierClicked = true;
       }
     }
 
-    if (isFriendClicked) {
-      // Extra high-pitched baby clone squeak + happy bounce!
+    if (isCloneOrBallClicked) {
+      creature.triggerBoop(true);
+      boopShockwave = 0.85;
+    } else if (isSoldierClicked) {
       playMochiBoopSound(1.38);
       creature.triggerBoop(true);
       boopShockwave = 0.85;
@@ -566,8 +710,13 @@ window.addEventListener('keydown', (e) => {
     'v': 'bubbles',
     'k': 'king_mode',
     'j': 'soldiers_fight',
+    'l': 'scold_clones',
     '0': 'stop'
   };
+  if (key === 'l' && voiceAssistant && voiceAssistant.triggerScoldClonesSpeech) {
+    voiceAssistant.triggerScoldClonesSpeech();
+    return;
+  }
   if (keyMap[key] && voiceAssistant && voiceAssistant.playAction) {
     voiceAssistant.playAction(keyMap[key]);
     return;
