@@ -18,6 +18,9 @@ import {
   playHairDryerSound,
   playBubbleSpawnSound,
   playBubblePopSound,
+  playRoyalFanfareSound,
+  playSpearClashSound,
+  playSoldierCheerSound,
   getActiveVocalEnvelope,
   setGlobalEmotionPitchMultiplier
 } from './soundEffects.js';
@@ -1134,6 +1137,306 @@ export function createBlobCreature(options = {}) {
     });
   }
 
+  // =========================================================================
+  // 4C. CUTE MINI ROYAL SOLDIERS ("भाला सैनिक" — King Mode & Duel/Fight)
+  // =========================================================================
+  const soldiersContainer = new THREE.Group();
+  soldiersContainer.name = 'MochiRoyalSoldiers';
+  soldiersContainer.visible = false;
+  root.add(soldiersContainer);
+
+  const SOLDIER_CONFIGS = [
+    {
+      name: 'Veer',
+      side: -1, // Left Front
+      baseColor: '#be123c', // Crimson Armor
+      tipColor: '#fda4af',
+      blushColor: '#ff70a6',
+      helmetColor: '#fbbf24',
+      plumeColor: '#ef4444',
+      offsetX: -1.45,
+      offsetZ: 0.28,
+      scale: 0.32,
+      yaw: 0.38,
+      phaseOffset: 0.0
+    },
+    {
+      name: 'Sheru',
+      side: -1, // Left Rear
+      baseColor: '#1d4ed8', // Royal Blue Armor
+      tipColor: '#93c5fd',
+      blushColor: '#f472b6',
+      helmetColor: '#fbbf24',
+      plumeColor: '#3b82f6',
+      offsetX: -1.90,
+      offsetZ: -0.22,
+      scale: 0.30,
+      yaw: 0.28,
+      phaseOffset: 1.2
+    },
+    {
+      name: 'Bahadur',
+      side: 1, // Right Front
+      baseColor: '#047857', // Emerald Armor
+      tipColor: '#6ee7b7',
+      blushColor: '#fb7185',
+      helmetColor: '#fbbf24',
+      plumeColor: '#10b981',
+      offsetX: 1.45,
+      offsetZ: 0.28,
+      scale: 0.32,
+      yaw: -0.38,
+      phaseOffset: 2.4
+    },
+    {
+      name: 'Toofan',
+      side: 1, // Right Rear
+      baseColor: '#6d28d9', // Royal Purple Armor
+      tipColor: '#c4b5fd',
+      blushColor: '#f472b6',
+      helmetColor: '#fbbf24',
+      plumeColor: '#8b5cf6',
+      offsetX: 1.90,
+      offsetZ: -0.22,
+      scale: 0.30,
+      yaw: -0.28,
+      phaseOffset: 3.6
+    }
+  ];
+
+  const silverBladeMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f1f5f9'),
+    roughness: 0.12,
+    metalness: 0.95
+  });
+  const woodShaftMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#78350f'),
+    roughness: 0.72,
+    metalness: 0.05
+  });
+  const redTasselMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#ef4444'),
+    roughness: 0.6
+  });
+
+  const royalSoldiers = [];
+  for (let i = 0; i < SOLDIER_CONFIGS.length; i++) {
+    const cfg = SOLDIER_CONFIGS[i];
+    const sGroup = new THREE.Group();
+    sGroup.name = `RoyalSoldier_${cfg.name}`;
+
+    // Body
+    const sSkinMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(cfg.baseColor),
+      roughness: 0.65,
+      metalness: 0.08
+    });
+    const sBody = new THREE.Mesh(miniBodyGeo, sSkinMat);
+    sBody.castShadow = true;
+    sBody.receiveShadow = true;
+    sGroup.add(sBody);
+
+    // Fluffy shells
+    for (let sh = 1; sh <= 3; sh++) {
+      const frac = sh / 3;
+      const shellCol = new THREE.Color(cfg.baseColor).lerp(new THREE.Color(cfg.tipColor), frac);
+      const shMat = new THREE.MeshStandardMaterial({
+        color: shellCol,
+        emissive: shellCol,
+        emissiveIntensity: 0.14 * frac,
+        roughness: 0.85,
+        transparent: true,
+        opacity: 0.55 * (1.0 - frac * 0.5),
+        depthWrite: false
+      });
+      const shMesh = new THREE.Mesh(miniBodyGeo, shMat);
+      const sFactor = 1.0 + frac * 0.13;
+      shMesh.scale.set(sFactor, sFactor, sFactor);
+      sGroup.add(shMesh);
+    }
+
+    // Kawaii Eyes
+    const sEyes = [];
+    for (const side of [-1, 1]) {
+      const sEyePivot = new THREE.Group();
+      sEyePivot.position.set(side * 0.31, 0.16, 0.94);
+      sEyePivot.rotation.y = side * 0.22;
+      sEyePivot.rotation.x = -0.06;
+
+      const sEyeballGeo = new THREE.SphereGeometry(0.175, 18, 14);
+      sEyeballGeo.scale(0.96, 1.08, 0.68);
+      const sEyeball = new THREE.Mesh(sEyeballGeo, eyeMaterial);
+      sEyePivot.add(sEyeball);
+
+      const sCatch = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), highlightMat);
+      sCatch.position.set(-side * 0.042, 0.052, 0.115);
+      sEyePivot.add(sCatch);
+
+      sGroup.add(sEyePivot);
+      sEyes.push(sEyePivot);
+    }
+
+    // Blush
+    const sBlushMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(cfg.blushColor),
+      transparent: true,
+      opacity: 0.72,
+      depthWrite: false
+    });
+    for (const side of [-1, 1]) {
+      const sBlush = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), sBlushMat);
+      sBlush.scale.set(1.4, 0.75, 0.35);
+      sBlush.position.set(side * 0.49, 0.0, 0.97);
+      sBlush.rotation.y = side * 0.34;
+      sGroup.add(sBlush);
+    }
+
+    // Nose & Mouth
+    const sNose = new THREE.Mesh(noseGeo, noseMat);
+    sNose.position.set(0, 0.075, 1.06);
+    sGroup.add(sNose);
+
+    const sMouth = mouthGroup.clone();
+    sMouth.position.set(0, 0.035, 1.055);
+    sGroup.add(sMouth);
+
+    // =======================================================================
+    // Golden Soldier Helmet with Plumed Crest
+    // =======================================================================
+    const helmetGroup = new THREE.Group();
+    helmetGroup.position.set(0, 0.42, 0.06);
+
+    const helmetDome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.48, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.62),
+      goldMat
+    );
+    helmetGroup.add(helmetDome);
+
+    const helmetRim = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.035, 8, 24), goldMat);
+    helmetRim.position.set(0, -0.06, 0);
+    helmetRim.rotation.x = Math.PI / 2;
+    helmetGroup.add(helmetRim);
+
+    // Feather Plume on Top
+    const plumeMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(cfg.plumeColor),
+      roughness: 0.45
+    });
+    const plume = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.34, 10), plumeMat);
+    plume.position.set(0, 0.38, -0.04);
+    plume.rotation.z = -0.15;
+    helmetGroup.add(plume);
+
+    sGroup.add(helmetGroup);
+
+    // =======================================================================
+    // Royal Spear ("भाला" held in hand)
+    // =======================================================================
+    const spearPivot = new THREE.Group();
+    spearPivot.position.set(0.42 * cfg.side, -0.08, 0.45);
+
+    // Spear Shaft
+    const spearShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.48, 12), woodShaftMat);
+    spearShaft.position.set(0, 0.48, 0);
+    spearPivot.add(spearShaft);
+
+    // Spear Collar (Gold)
+    const spearCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.045, 12), goldMat);
+    spearCollar.position.set(0, 1.18, 0);
+    spearPivot.add(spearCollar);
+
+    // Silk Tassel
+    const spearTassel = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 8), redTasselMat);
+    spearTassel.position.set(0, 1.14, 0);
+    spearTassel.rotation.x = Math.PI;
+    spearPivot.add(spearTassel);
+
+    // Spearhead Blade (Shiny Silver Diamond Cone)
+    const spearHead = new THREE.Mesh(new THREE.ConeGeometry(0.082, 0.32, 4), silverBladeMat);
+    spearHead.position.set(0, 1.34, 0);
+    spearHead.rotation.y = Math.PI / 4;
+    spearPivot.add(spearHead);
+
+    // Little cute soldier hand gripping the spear
+    const handPaw = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), sSkinMat);
+    handPaw.position.set(0, 0.15, 0);
+    spearPivot.add(handPaw);
+
+    sGroup.add(spearPivot);
+
+    // =======================================================================
+    // Royal Buckler Shield ("ढाल" on opposite side)
+    // =======================================================================
+    const shieldPivot = new THREE.Group();
+    shieldPivot.position.set(-0.44 * cfg.side, -0.08, 0.45);
+
+    const shieldPlateMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(cfg.baseColor),
+      roughness: 0.35,
+      metalness: 0.45
+    });
+    const shieldPlate = new THREE.Mesh(new THREE.CylinderGeometry(0.20, 0.20, 0.025, 24), shieldPlateMat);
+    shieldPlate.rotation.x = Math.PI / 2;
+    shieldPivot.add(shieldPlate);
+
+    const shieldRim = new THREE.Mesh(new THREE.TorusGeometry(0.20, 0.025, 8, 24), goldMat);
+    shieldPivot.add(shieldRim);
+
+    const shieldBoss = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), goldMat);
+    shieldBoss.position.set(0, 0, 0.025);
+    shieldPivot.add(shieldBoss);
+
+    // Left hand paw gripping shield
+    const shieldPaw = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 8), sSkinMat);
+    shieldPaw.position.set(0, 0, -0.04);
+    shieldPivot.add(shieldPaw);
+
+    sGroup.add(shieldPivot);
+
+    sGroup.scale.set(0.001, 0.001, 0.001);
+    soldiersContainer.add(sGroup);
+
+    royalSoldiers.push({
+      group: sGroup,
+      eyes: sEyes,
+      mouth: sMouth,
+      spearPivot,
+      shieldPivot,
+      cfg,
+      spawnProgress: 0.0,
+      currentX: cfg.offsetX,
+      currentZ: cfg.offsetZ
+    });
+  }
+
+  // Spark burst particles for spear clashing during duel
+  const clashSparksGroup = new THREE.Group();
+  clashSparksGroup.name = 'ClashSparks';
+  soldiersContainer.add(clashSparksGroup);
+
+  const sparkGeo = new THREE.OctahedronGeometry(0.048);
+  const sparkMeshes = [];
+  for (let sp = 0; sp < 14; sp++) {
+    const sm = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#fef08a'),
+      transparent: true,
+      opacity: 0.0
+    }));
+    clashSparksGroup.add(sm);
+    sparkMeshes.push({ mesh: sm, vel: new THREE.Vector3(), life: 0.0 });
+  }
+
+  function triggerClashSpark(x, y, z) {
+    for (let k = 0; k < sparkMeshes.length; k++) {
+      const sp = sparkMeshes[k];
+      sp.mesh.position.set(x + (Math.random() - 0.5) * 0.18, y + (Math.random() - 0.5) * 0.18, z + (Math.random() - 0.5) * 0.18);
+      sp.vel.set((Math.random() - 0.5) * 2.2, Math.random() * 1.8 + 0.6, (Math.random() - 0.5) * 2.2);
+      sp.life = 0.28;
+      sp.mesh.material.opacity = 1.0;
+      sp.mesh.scale.setScalar(Math.random() * 0.7 + 0.7);
+    }
+  }
+
   // Animation & physics state for creature motion (coupled to GPGPU fur inertia)
   const animState = {
     time: 0,
@@ -1165,6 +1468,13 @@ export function createBlobCreature(options = {}) {
     friendsMischiefTriggered: false,
     friendsRunningWild: false,
     awaitingFriendDismissConfirm: false,
+    soldiersVisible: false,
+    soldiersTimer: 0.0,
+    soldiersActiveTime: 0.0,
+    soldiersState: 'guarding',
+    soldiersFightTimer: 0.0,
+    soldiersPlayTimer: 0.0,
+    lastClashSoundTime: 0,
     accessories: {
       crown: false,
       party_hat: false,
@@ -1382,6 +1692,48 @@ export function createBlobCreature(options = {}) {
     }
   }
 
+  function summonSoldiers(duration = 90.0) {
+    animState.soldiersVisible = true;
+    animState.soldiersTimer = duration;
+    animState.soldiersActiveTime = 0.0;
+    animState.soldiersState = 'guarding';
+    animState.soldiersFightTimer = 0.0;
+    animState.soldiersPlayTimer = 0.0;
+    soldiersContainer.visible = true;
+
+    // Equip Royal Golden Crown on Mochi King!
+    animState.accessories.crown = true;
+    animState.accessories.party_hat = false;
+    crownGroup.visible = true;
+    partyHatGroup.visible = false;
+
+    animState.boopImpulse = 0.85;
+    emotionEngine.feedStimulus('praise', 1.5);
+    playRoyalFanfareSound();
+  }
+
+  function triggerSoldiersFight(duration = 14.0) {
+    if (!animState.soldiersVisible) {
+      summonSoldiers(duration + 40.0);
+    }
+    animState.soldiersState = 'fighting';
+    animState.soldiersFightTimer = 4.8; // Comical duel for 4.8s then playful celebration
+    animState.soldiersPlayTimer = 9.2;
+    animState.boopImpulse = 0.65;
+    playSpearClashSound();
+  }
+
+  function dismissSoldiers() {
+    animState.soldiersVisible = false;
+    animState.soldiersTimer = 0.0;
+    animState.soldiersState = 'guarding';
+    animState.soldiersFightTimer = 0.0;
+    animState.soldiersPlayTimer = 0.0;
+    if (canPlaySfx(80)) {
+      playDeflatePopSound();
+    }
+  }
+
   function toggleAccessory(item, state = undefined) {
     const key = String(item || '').toLowerCase().trim();
     if (key === 'remove_all' || key === 'none' || key === 'clear') {
@@ -1526,6 +1878,22 @@ export function createBlobCreature(options = {}) {
     }
     if (action === 'bubbles') {
       spawnBubbles(16.0);
+      return;
+    }
+    if (action === 'king_mode' || action === 'king') {
+      summonSoldiers(90.0);
+      animState.activeAction = 'love';
+      animState.actionTimer = 3.5;
+      return;
+    }
+    if (action === 'soldiers_fight' || action === 'fight') {
+      triggerSoldiersFight(14.0);
+      animState.activeAction = 'happy_jump';
+      animState.actionTimer = 4.5;
+      return;
+    }
+    if (action === 'dismiss_soldiers') {
+      dismissSoldiers();
       return;
     }
 
@@ -2284,12 +2652,159 @@ export function createBlobCreature(options = {}) {
       }
     }
     friendsContainer.visible = anyFriendVisible;
+
+    // =========================================================================
+    // UPDATE CUTE MINI ROYAL SOLDIERS ("भाला सैनिक" — King Mode & Duel/Fight)
+    // =========================================================================
+    if (animState.soldiersVisible) {
+      animState.soldiersActiveTime += safeDt;
+
+      if (animState.soldiersTimer > 0) {
+        animState.soldiersTimer -= safeDt;
+        if (animState.soldiersTimer <= 0) {
+          animState.soldiersTimer = 0.0;
+          animState.soldiersVisible = false;
+        }
+      }
+
+      if (animState.soldiersState === 'fighting') {
+        animState.soldiersFightTimer -= safeDt;
+        if (animState.soldiersFightTimer <= 0) {
+          animState.soldiersState = 'playing';
+          animState.soldiersPlayTimer = 9.2;
+          playSoldierCheerSound();
+        }
+      } else if (animState.soldiersState === 'playing') {
+        animState.soldiersPlayTimer -= safeDt;
+        if (animState.soldiersPlayTimer <= 0) {
+          animState.soldiersState = 'guarding';
+        }
+      }
+    }
+
+    // Update Spark Particles
+    for (let k = 0; k < sparkMeshes.length; k++) {
+      const sp = sparkMeshes[k];
+      if (sp.life > 0) {
+        sp.life -= safeDt;
+        sp.mesh.position.addScaledVector(sp.vel, safeDt);
+        sp.vel.y -= safeDt * 4.8;
+        sp.mesh.material.opacity = Math.max(0.0, sp.life / 0.28);
+      } else {
+        sp.mesh.material.opacity = 0.0;
+      }
+    }
+
+    let anySoldierVisible = false;
+    for (let i = 0; i < royalSoldiers.length; i++) {
+      const ms = royalSoldiers[i];
+      const targetSpawn = animState.soldiersVisible ? 1.0 : 0.0;
+      ms.spawnProgress += (targetSpawn - ms.spawnProgress) * Math.min(1.0, safeDt * 6.5);
+
+      if (ms.spawnProgress > 0.01) {
+        anySoldierVisible = true;
+        ms.group.visible = true;
+        const cfg = ms.cfg;
+        const p = ms.spawnProgress;
+        const soldierScale = cfg.scale * s * p;
+        const fTime = animState.time * 5.2 + cfg.phaseOffset;
+
+        let targetX = cfg.offsetX;
+        let targetZ = cfg.offsetZ;
+        let targetYaw = cfg.yaw;
+        let spearTiltX = 0.08;
+        let spearTiltZ = 0.05;
+        let hopAmp = 0.08;
+        let hopFreq = fTime;
+        let flipAngle = 0.0;
+
+        if (animState.soldiersState === 'fighting') {
+          const isFront = (i === 0 || i === 2);
+          const clashX = isFront ? 0.38 : 0.48;
+          targetX = cfg.side * clashX;
+          targetZ = isFront ? 0.35 : -0.15;
+          targetYaw = cfg.side < 0 ? Math.PI * 0.48 : -Math.PI * 0.48;
+
+          const joustSpeed = 16.0;
+          const thrust = Math.sin(animState.time * joustSpeed + cfg.phaseOffset);
+          spearTiltX = 1.35 + thrust * 0.18;
+          spearTiltZ = (cfg.side < 0 ? 0.15 : -0.15) * thrust;
+
+          if (i === 0 && thrust > 0.88 && animState.time - (animState.lastClashSoundTime || 0) > 0.22) {
+            animState.lastClashSoundTime = animState.time;
+            playSpearClashSound();
+            triggerClashSpark(anchorPos.x, anchorPos.y - 0.25 * s, anchorPos.z + (isFront ? 0.35 : -0.15) * s);
+          }
+
+          hopAmp = 0.16;
+          hopFreq = animState.time * 12.0;
+        } else if (animState.soldiersState === 'playing') {
+          targetX = cfg.offsetX * 0.72 + Math.sin(animState.time * 3.5 + cfg.phaseOffset) * 0.25;
+          targetZ = cfg.offsetZ + Math.cos(animState.time * 3.0 + cfg.phaseOffset) * 0.20;
+          targetYaw = cfg.yaw + Math.sin(animState.time * 4.0 + cfg.phaseOffset) * 0.8;
+
+          spearTiltX = -0.35 + Math.sin(animState.time * 8.0 + cfg.phaseOffset) * 0.25;
+          spearTiltZ = Math.sin(animState.time * 6.0 + cfg.phaseOffset) * 0.35;
+
+          hopAmp = 0.30;
+          hopFreq = animState.time * 9.5;
+          flipAngle = Math.sin(hopFreq + cfg.phaseOffset) > 0.5 ? ((animState.time * 7.0) % (Math.PI * 2)) : 0.0;
+        }
+
+        ms.currentX += (targetX - ms.currentX) * Math.min(1.0, safeDt * 5.5);
+        ms.currentZ += (targetZ - ms.currentZ) * Math.min(1.0, safeDt * 5.5);
+
+        const fHop = Math.abs(Math.sin(hopFreq + cfg.phaseOffset)) * hopAmp * s * p;
+        const fSquash = 1.0 + Math.sin(hopFreq * 2.0) * 0.12;
+
+        const cosYaw = Math.cos(facingYaw);
+        const sinYaw = Math.sin(facingYaw);
+        const localX = ms.currentX * s * p;
+        const localZ = ms.currentZ * s * p;
+        const worldOffsetX = localX * cosYaw + localZ * sinYaw;
+        const worldOffsetZ = -localX * sinYaw + localZ * cosYaw;
+
+        const groundY = anchorPos.y - 0.94 * s + 0.94 * soldierScale;
+        ms.group.position.set(
+          anchorPos.x + worldOffsetX,
+          groundY + fHop,
+          anchorPos.z + worldOffsetZ
+        );
+
+        ms.group.scale.set(
+          (1.0 / Math.sqrt(fSquash)) * soldierScale,
+          fSquash * soldierScale,
+          (1.0 / Math.sqrt(fSquash)) * soldierScale
+        );
+
+        ms.group.rotation.y = facingYaw + targetYaw + Math.sin(fTime * 0.5) * 0.08;
+        ms.group.rotation.x = facingPitch + flipAngle;
+
+        if (ms.spearPivot) {
+          ms.spearPivot.rotation.x = spearTiltX;
+          ms.spearPivot.rotation.z = spearTiltZ;
+        }
+
+        if (ms.shieldPivot) {
+          ms.shieldPivot.rotation.y = (cfg.side < 0 ? -0.25 : 0.25) + Math.sin(fTime * 0.8) * 0.12;
+          ms.shieldPivot.rotation.x = (animState.soldiersState === 'fighting' ? 0.35 : 0.0);
+        }
+
+        for (const fEye of ms.eyes) {
+          fEye.scale.y = blinkScaleY;
+        }
+      } else {
+        ms.group.visible = false;
+      }
+    }
+    soldiersContainer.visible = anySoldierVisible;
   }
 
   return {
     root,
     group: root,
     friendsContainer,
+    soldiersContainer,
     rainContainer,
     bubblesContainer,
     bodyMesh,
@@ -2306,6 +2821,9 @@ export function createBlobCreature(options = {}) {
     summonFriends,
     dismissFriends,
     calmFriendsAndKeep,
+    summonSoldiers,
+    triggerSoldiersFight,
+    dismissSoldiers,
     toggleAccessory,
     setWeatherState,
     spawnBubbles,

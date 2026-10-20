@@ -107,7 +107,7 @@ User asked: "${userQuery}"
 Return ONLY a valid JSON object in this exact schema:
 {
   "reply": "Cute spoken response in 1-2 short sentences in childlike Hindi/Hinglish",
-  "action": null or one of ["dance", "cry", "laugh", "pout", "sleep", "love", "feed", "hair_dryer", "bubbles", "peekaboo", "summon_friends", "dismiss_friends", "keep_friends", "happy_jump", "shake_fur"],
+  "action": null or one of ["dance", "cry", "laugh", "pout", "sleep", "love", "feed", "hair_dryer", "bubbles", "peekaboo", "summon_friends", "dismiss_friends", "keep_friends", "happy_jump", "shake_fur", "king_mode", "soldiers_fight", "dismiss_soldiers"],
   "weather": null or one of ["rain", "umbrella", "clear"],
   "accessory": null or {"type": "sunglasses"|"crown"|"party_hat"|"bowtie", "equip": true}
 }`;

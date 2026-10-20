@@ -564,6 +564,8 @@ window.addEventListener('keydown', (e) => {
     'f': 'feed',
     'd': 'hair_dryer',
     'v': 'bubbles',
+    'k': 'king_mode',
+    'j': 'soldiers_fight',
     '0': 'stop'
   };
   if (keyMap[key] && voiceAssistant && voiceAssistant.playAction) {

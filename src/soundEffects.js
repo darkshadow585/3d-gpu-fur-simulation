@@ -838,6 +838,89 @@ export function playBubblePopSound(pitch = 1.0) {
   } catch (e) {}
 }
 
+export function playRoyalFanfareSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Cute royal trumpet arpeggio: C5 (523Hz), E5 (659Hz), G5 (784Hz), C6 (1046Hz)
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = now + idx * 0.085;
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq * globalCutePitchScale, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.exponentialRampToValueAtTime(0.24, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.3);
+    });
+    triggerVocalMouthBounce(0.55, 420);
+  } catch (e) {}
+}
+
+export function playSpearClashSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // High-pitched metallic "Ting-Clink!" clash
+    const clashFreqs = [2400, 3600, 4800];
+    clashFreqs.forEach((freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.82, now + 0.12);
+      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    });
+    triggerVocalMouthBounce(0.35, 120);
+  } catch (e) {}
+}
+
+export function playSoldierCheerSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    playSyllable(ctx, {
+      startTime: now,
+      duration: 0.16,
+      f0Start: 720,
+      f0End: 1180,
+      formantFreq: 2100,
+      gainPeak: 0.38,
+      type: 'triangle',
+      vibratoDepth: 14
+    });
+    setTimeout(() => {
+      playSyllable(ctx, {
+        startTime: ctx.currentTime,
+        duration: 0.18,
+        f0Start: 880,
+        f0End: 1420,
+        formantFreq: 2600,
+        gainPeak: 0.42,
+        type: 'sine',
+        vibratoDepth: 20
+      });
+    }, 110);
+    triggerVocalMouthBounce(0.65, 320);
+  } catch (e) {}
+}
+
 export function getActiveVocalEnvelope() {
   return activeVocalEnvelope;
 }

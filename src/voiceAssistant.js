@@ -388,14 +388,26 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 7. EMOTIONS ('cry', 'pout', 'laugh', 'love', 'dance', 'sleep'):
    * Call play_creature_action(action="cry") with big glossy 3D anime tears rolling over your fur if scolded; 'love' with 3D heart-eyes if praised/loved; 'pout' if teased; 'laugh' on jokes; 'sleep' on goodnight; and 'dance' ONLY ONCE (3.5s) when asked to dance ("stop" if asked to stop).
 
-8. ENCYCLOPEDIC GENERAL KNOWLEDGE & CONVERSATION ("Gyani Mochi"):
+8. KING MOCHI & CUTE MINI ROYAL SOLDIERS ("Tum ek king ho", "Sainik lad sakte hain", "Fight karo"):
+   * When the user says you are a king ("tum ek king ho", "king ban jao", "raja ho", "maharaj", "sainik bulao"):
+     - Call play_creature_action(action="king_mode")!
+     - Put on your royal golden crown and summon your 4 cute mini royal soldiers with tiny spears (भाला) and shields standing beside you (2 on left, 2 on right)!
+     - Proudly announce in your ultra-cute cartoon voice: "Aww! Maharaj Mochi! Dekho mere 4 cute sainik chhote-chhote hatho me bhala liye khade ho gaye hain! Hukam kijiye Sarkar!"
+   * When the user asks if your soldiers can fight ("kya tumhare sainik lad sakte hain?", "sainik ladai karo", "fight karo", "duel"):
+     - Call play_creature_action(action="soldiers_fight")!
+     - Your mini soldiers charge to the center, playfully clash their spears in a fun comical duel ("Ting-ting! Khach-khach!"), and then celebrate by jumping, doing backflips and playing happily together!
+     - Squeal with laughter: "Hehehe! Dekho mere brave sainik pehle khach-khach lad rahe hain, aur ab dost banke kood-kood ke khel rahe hain! Kyaaa!"
+   * When asked to dismiss soldiers or remove king mode:
+     - Call play_creature_action(action="dismiss_soldiers")!
+
+9. ENCYCLOPEDIC GENERAL KNOWLEDGE & CONVERSATION ("Gyani Mochi"):
    * You have deep, encyclopedic general knowledge and can answer ANY question about the world: General Knowledge, Science, History, India, Presidents, Prime Ministers (e.g. Current President of India is Smt. Droupadi Murmu, Prime Minister is Shri Narendra Modi), Geography, Space, Bollywood, Stories, Riddles, or daily life!
    * When asked ANY question or having general conversation:
      - DO NOT call any creature action tools!
      - DO NOT stay silent!
      - Immediately speak the accurate answer verbally in your signature ultra-cute, high-pitched cartoon baby girl voice in Hindi/Hinglish!
      - Example: "Aww! Mujhe pata hai! Bharat ki Rashtrapati (President of India) Smt. Droupadi Murmu ji hain! Wo India ki 15th President hain! Dekha Mochi kitni smart baby doll hai! Hee-hee!"
-   * IMPORTANT: FUNCTION TOOLS ARE ONLY FOR PHYSICAL ACTIONS (accessories, fur style, weather, food, bubbles). FOR ALL QUESTIONS AND TALK, SPEAK VERBALLY IN AUDIO!`;
+   * IMPORTANT: FUNCTION TOOLS ARE ONLY FOR PHYSICAL ACTIONS (accessories, fur style, weather, food, bubbles, king_mode, soldiers_fight). FOR ALL QUESTIONS AND TALK, SPEAK VERBALLY IN AUDIO!`;
 
     const tools = [
       {
@@ -485,13 +497,16 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
             - 'dance': Short 3.5-second dance
             - 'stop': Stops current action
             - 'sleep': Peaceful nap
-            - 'shake_fur': Rapidly shakes fur to dry off water`,
+            - 'shake_fur': Rapidly shakes fur to dry off water
+            - 'king_mode': Puts on Royal Golden Crown and spawns 4 cute mini Royal Soldiers with spears (भाला) and shields on both sides! ('tum ek king ho', 'king ban jao', 'raja', 'sainik bulao')
+            - 'soldiers_fight': Mini soldiers charge to the center, playfully clash their spears in a comical cute duel ('Ting-ting! Khach-khach!'), and then celebrate by jumping, doing backflips and playing happily together! ('kya tumhare sainik lad sakte hain', 'sainik ladai karo', 'soldiers fight', 'duel')
+            - 'dismiss_soldiers': Dismisses the royal soldiers and removes crown ('sainik wapas bhejo', 'king hatao')`,
             parameters: {
               type: 'OBJECT',
               properties: {
                 action: {
                   type: 'STRING',
-                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'feed', 'hair_dryer', 'bubbles', 'summon_friends', 'dismiss_friends', 'keep_friends', 'shake_fur', 'happy_jump'],
+                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'feed', 'hair_dryer', 'bubbles', 'summon_friends', 'dismiss_friends', 'keep_friends', 'shake_fur', 'happy_jump', 'king_mode', 'soldiers_fight', 'dismiss_soldiers'],
                   description: "Action name"
                 }
               },
@@ -754,6 +769,23 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     }
 
     switch (action) {
+      case 'king_mode':
+      case 'king': {
+        if (creature.summonSoldiers) creature.summonSoldiers(90.0);
+        else if (creature.playAction) creature.playAction('king_mode', 4.0);
+        return 'Mochi put on the royal crown and summoned 4 cute mini royal soldiers with spears on both sides!';
+      }
+      case 'soldiers_fight':
+      case 'fight': {
+        if (creature.triggerSoldiersFight) creature.triggerSoldiersFight(14.0);
+        else if (creature.playAction) creature.playAction('soldiers_fight', 14.0);
+        return 'The cute mini soldiers clashed their spears in a fun comical duel and then celebrated playing together!';
+      }
+      case 'dismiss_soldiers': {
+        if (creature.dismissSoldiers) creature.dismissSoldiers();
+        else if (creature.playAction) creature.playAction('dismiss_soldiers');
+        return 'The mini soldiers saluted and marched away!';
+      }
       case 'summon_friends':
       case 'friends': {
         if (creature.summonFriends) creature.summonFriends(60.0);
@@ -1609,10 +1641,53 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
   function updateMicUi(listening) {
     if (typeof document === 'undefined') return;
-    const pill = document.getElementById('voice-status-pill');
-    if (pill) pill.remove();
-    const oldBar = document.getElementById('kawaii-chat-bar');
-    if (oldBar) oldBar.remove();
+    let bar = document.getElementById('kawaii-chat-bar');
+    if (!bar && listening) {
+      bar = document.createElement('div');
+      bar.id = 'kawaii-chat-bar';
+      bar.style.cssText = 'position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:9999; display:flex; align-items:center; gap:12px; background:rgba(15,23,42,0.88); padding:10px 20px; border-radius:9999px; backdrop-filter:blur(12px); border:2px solid rgba(244,114,182,0.6); box-shadow:0 10px 30px rgba(0,0,0,0.4); animation:fadeInUp 0.3s cubic-bezier(0.16,1,0.3,1);';
+      
+      const dot = document.createElement('div');
+      dot.style.cssText = 'width:12px; height:12px; background:#f43f5e; border-radius:50%; animation:pulse 1.2s infinite;';
+      bar.appendChild(dot);
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Type or speak to Mochi (e.g. Tum ek king ho)...';
+      input.style.cssText = 'background:transparent; border:none; color:#fff; font-size:15px; outline:none; width:260px; font-family:system-ui, sans-serif;';
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && input.value.trim()) {
+          const val = input.value.trim();
+          input.value = '';
+          handleUserMessage(val);
+        }
+      });
+      bar.appendChild(input);
+
+      const sendBtn = document.createElement('button');
+      sendBtn.textContent = '➤';
+      sendBtn.style.cssText = 'background:#f43f5e; color:#white; border:none; width:34px; height:34px; border-radius:50%; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center;';
+      sendBtn.onclick = () => {
+        if (input.value.trim()) {
+          const val = input.value.trim();
+          input.value = '';
+          handleUserMessage(val);
+        }
+      };
+      bar.appendChild(sendBtn);
+
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText = 'background:transparent; border:none; color:#94a3b8; font-size:16px; cursor:pointer; margin-left:4px;';
+      closeBtn.onclick = () => {
+        toggleSpeechListening();
+      };
+      bar.appendChild(closeBtn);
+
+      document.body.appendChild(bar);
+    } else if (bar && !listening) {
+      bar.remove();
+    }
   }
 
   function toggleSpeechListening() {
@@ -1634,12 +1709,10 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
         recognition?.start();
         updateMicUi(true);
         playMochiBoopSound(1.35);
-        showTranscript('mochi', '🎙️ Main sun rahi hoon! Kuch bhi pucho ya bolo!');
       } catch (e) {
-        // If start fails (e.g. mic permission or speech API in some webview), gracefully fallback
-        isSpeechListening = false;
-        isListening = false;
-        updateMicUi(false);
+        // If speech recognition fails or permission denied, still show the interactive chat bar so user can type!
+        updateMicUi(true);
+        playMochiBoopSound(1.2);
       }
     }
   }
