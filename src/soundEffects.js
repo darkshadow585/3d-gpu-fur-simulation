@@ -10,6 +10,12 @@ let sharedAudioCtx = null;
 let soundEnabled = true;
 let activeVocalEnvelope = 0;
 let vocalDecayTimer = null;
+let globalCutePitchScale = 1.20; // Signature high-pitch cartoon baby doll timbre
+let globalEmotionPitchMultiplier = 1.0;
+
+export function setGlobalEmotionPitchMultiplier(mult = 1.0) {
+  globalEmotionPitchMultiplier = Math.min(1.4, Math.max(0.75, Number(mult) || 1.0));
+}
 
 function getAudioContext() {
   if (!sharedAudioCtx && typeof window !== 'undefined') {
@@ -56,6 +62,11 @@ function playSyllable(ctx, {
   vibratoRate = 24,
   vibratoDepth = 18
 }) {
+  const pitchMult = globalCutePitchScale * globalEmotionPitchMultiplier;
+  const scaledF0Start = f0Start * pitchMult;
+  const scaledF0End = f0End * pitchMult;
+  const scaledFormant = formantFreq * Math.pow(pitchMult, 0.7);
+
   const osc = ctx.createOscillator();
   const subOsc = ctx.createOscillator();
   const filter = ctx.createBiquadFilter();
@@ -64,11 +75,11 @@ function playSyllable(ctx, {
   osc.type = type;
   subOsc.type = 'sine';
 
-  osc.frequency.setValueAtTime(f0Start, startTime);
-  osc.frequency.exponentialRampToValueAtTime(Math.max(80, f0End), startTime + duration);
+  osc.frequency.setValueAtTime(scaledF0Start, startTime);
+  osc.frequency.exponentialRampToValueAtTime(Math.max(80, scaledF0End), startTime + duration);
 
-  subOsc.frequency.setValueAtTime(f0Start * 2.0, startTime);
-  subOsc.frequency.exponentialRampToValueAtTime(Math.max(160, f0End * 2.0), startTime + duration);
+  subOsc.frequency.setValueAtTime(scaledF0Start * 2.0, startTime);
+  subOsc.frequency.exponentialRampToValueAtTime(Math.max(160, scaledF0End * 2.0), startTime + duration);
 
   // Subtle vibrato for organic kawaii vocal character
   if (vibratoDepth > 0) {

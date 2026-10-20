@@ -18,8 +18,10 @@ import {
   playHairDryerSound,
   playBubbleSpawnSound,
   playBubblePopSound,
-  getActiveVocalEnvelope
+  getActiveVocalEnvelope,
+  setGlobalEmotionPitchMultiplier
 } from './soundEffects.js';
+import { createEmotionEngine } from './emotionEngine.js';
 
 /**
  * Evaluates the anatomical follicle growth mask at a local position on the blob surface.
@@ -1185,6 +1187,9 @@ export function createBlobCreature(options = {}) {
     currentLook: new THREE.Vector2(0, 0)
   };
 
+  // Emotion Summation Master Engine
+  const emotionEngine = createEmotionEngine();
+
   // Spatial anchor position & viewer-facing orientation for AR plane placement
   const anchorPos = new THREE.Vector3(0, 0, 0);
   const targetAnchorPos = new THREE.Vector3(0, 0, 0);
@@ -1300,6 +1305,7 @@ export function createBlobCreature(options = {}) {
   function triggerBoop(silent = false) {
     animState.boopImpulse = 1.0;
     animState.boopPhase = 0.0;
+    emotionEngine.feedStimulus('boop', 1.0);
     if (!silent && canPlaySfx(90)) {
       playMochiBoopSound(1.0);
     }
@@ -1310,6 +1316,7 @@ export function createBlobCreature(options = {}) {
     animState.isTickled = true;
     animState.tickleTimer = 1.5;
     animState.tickleIntensity = Math.min(1.4, animState.tickleIntensity + intensity);
+    emotionEngine.feedStimulus('tickle', intensity);
   }
 
   function trigger5SecTickle() {
@@ -1318,6 +1325,7 @@ export function createBlobCreature(options = {}) {
     animState.tickleTimer = 2.5;
     animState.tickleIntensity = 1.8;
     animState.boopImpulse = 0.65;
+    emotionEngine.feedStimulus('tickle', 1.6);
   }
 
   function setCheekPuff(progress) {
@@ -1332,6 +1340,7 @@ export function createBlobCreature(options = {}) {
     animState.isTickled = false;
     animState.tickleTimer = 0.0;
     animState.boopImpulse = 0.45;
+    emotionEngine.feedStimulus('tease', 1.8);
   }
 
   function summonFriends(duration = 60.0) {
@@ -1343,6 +1352,7 @@ export function createBlobCreature(options = {}) {
     animState.awaitingFriendDismissConfirm = false;
     friendsContainer.visible = true;
     animState.boopImpulse = 0.75;
+    emotionEngine.feedStimulus('friends_mischief', 1.2);
     if (canPlaySfx(80)) {
       playFriendsSpawnSound();
     }
@@ -1353,6 +1363,7 @@ export function createBlobCreature(options = {}) {
     animState.friendsTimer = 0.0;
     animState.friendsRunningWild = false;
     animState.awaitingFriendDismissConfirm = false;
+    emotionEngine.feedStimulus('pet', 0.6);
     if (canPlaySfx(80)) {
       playDeflatePopSound();
     }
@@ -1364,6 +1375,7 @@ export function createBlobCreature(options = {}) {
       animState.friendsRunningWild = false;
       animState.awaitingFriendDismissConfirm = false;
       animState.boopImpulse = 0.55;
+      emotionEngine.feedStimulus('praise', 0.8);
       if (canPlaySfx(80)) {
         playAccessoryEquipSound();
       }
@@ -1410,12 +1422,14 @@ export function createBlobCreature(options = {}) {
       animState.hasUmbrella = false;
       animState.rainTimer = 18.0;
       rainContainer.visible = true;
+      emotionEngine.feedStimulus('rain_wet', 1.0);
       if (canPlaySfx(80)) playWeatherSound('rain');
     } else if (mode === 'umbrella') {
       animState.weatherMode = 'umbrella';
       animState.hasUmbrella = true;
       umbrellaGroup.visible = true;
       animState.boopImpulse = 0.55;
+      emotionEngine.feedStimulus('umbrella', 1.0);
       if (canPlaySfx(80)) playWeatherSound('umbrella');
     } else if (mode === 'rain_with_umbrella') {
       animState.weatherMode = 'umbrella';
@@ -1425,6 +1439,7 @@ export function createBlobCreature(options = {}) {
       rainContainer.visible = true;
       umbrellaGroup.visible = true;
       animState.boopImpulse = 0.55;
+      emotionEngine.feedStimulus('umbrella', 0.8);
       if (canPlaySfx(80)) playWeatherSound('umbrella');
     } else if (mode === 'clear' || mode === 'stop_rain' || mode === 'sunny') {
       const wasWet = animState.wetness > 0.2 || animState.isRaining;
@@ -1433,6 +1448,7 @@ export function createBlobCreature(options = {}) {
       animState.hasUmbrella = false;
       animState.rainTimer = 0.0;
       rainContainer.visible = false;
+      emotionEngine.feedStimulus('hair_dryer', 0.6);
       if (wasWet) {
         playAction('shake_fur', 2.2);
         if (typeof onWetShakeCallback === 'function') {
@@ -1453,6 +1469,7 @@ export function createBlobCreature(options = {}) {
       b.mesh.visible = true;
     }
     animState.boopImpulse = 0.65;
+    emotionEngine.feedStimulus('bubbles', 1.0);
     if (canPlaySfx(80)) {
       playBubbleSpawnSound();
     }
@@ -1468,6 +1485,7 @@ export function createBlobCreature(options = {}) {
     if (idx !== undefined && bubbleItems[idx] && bubbleItems[idx].poppedTimer <= 0) {
       bubbleItems[idx].poppedTimer = 1.6;
       bubbleItems[idx].mesh.visible = false;
+      emotionEngine.feedStimulus('pop_bubble', 1.0);
       playBubblePopSound(0.95 + (idx % 4) * 0.14);
       animState.boopImpulse = Math.max(animState.boopImpulse, 0.55);
       return true;
@@ -1520,48 +1538,57 @@ export function createBlobCreature(options = {}) {
         animState.boopImpulse = 0.85;
         animState.isPouting = false;
         animState.targetCheekPuff = 0.0;
+        emotionEngine.feedStimulus('dance', 1.2);
         if (canPlaySfx(80)) playDanceMusicBeat();
         break;
       case 'cry':
         animState.boopImpulse = 0.0;
         animState.isPouting = false;
         animState.targetCheekPuff = 0.0;
+        emotionEngine.feedStimulus('cry_release', 1.4);
         if (canPlaySfx(80)) playCrySound();
         break;
       case 'laugh':
         trigger5SecTickle();
+        emotionEngine.feedStimulus('tickle', 1.3);
         if (canPlaySfx(80)) playMochiGiggleSound();
         break;
       case 'pout':
         trigger10SecPout();
+        emotionEngine.feedStimulus('tease', 1.5);
         if (canPlaySfx(80)) playCutePoutSound();
         break;
       case 'sleep':
         animState.boopImpulse = 0.0;
         animState.targetCheekPuff = 0.0;
         animState.isPouting = false;
+        emotionEngine.feedStimulus('sleep', 1.2);
         if (canPlaySfx(80)) playSleepSound();
         break;
       case 'love':
         animState.boopImpulse = 0.8;
         animState.isPouting = false;
         animState.targetCheekPuff = 0.0;
+        emotionEngine.feedStimulus('praise', 1.4);
         if (canPlaySfx(80)) playLoveKissSound();
         break;
       case 'peekaboo':
         animState.boopImpulse = 0.55;
         animState.isPouting = false;
         animState.targetCheekPuff = 0.0;
+        emotionEngine.feedStimulus('play', 1.2);
         if (canPlaySfx(80)) playPeekabooSound();
         break;
       case 'shake_fur':
         animState.boopImpulse = 0.75;
         animState.angularVelocity.y += 28.0;
         animState.wetness = 0.0;
+        emotionEngine.feedStimulus('hair_dryer', 0.5);
         if (canPlaySfx(80)) playFurShakeSound();
         break;
       case 'happy_jump':
         animState.boopImpulse = 0.9;
+        emotionEngine.feedStimulus('play', 1.3);
         if (canPlaySfx(80)) playHappyJumpSound();
         break;
       case 'feed':
@@ -1570,6 +1597,7 @@ export function createBlobCreature(options = {}) {
         animState.isPouting = false;
         animState.targetCheekPuff = 0.0;
         treatGroup.visible = true;
+        emotionEngine.feedStimulus('feed', 1.5);
         if (canPlaySfx(80)) playFeedTreatSound();
         break;
       case 'hair_dryer':
@@ -1579,6 +1607,7 @@ export function createBlobCreature(options = {}) {
         animState.isRaining = false;
         rainContainer.visible = false;
         dryerGroup.visible = true;
+        emotionEngine.feedStimulus('hair_dryer', 1.4);
         if (canPlaySfx(80)) playHairDryerSound();
         break;
     }
@@ -1587,6 +1616,17 @@ export function createBlobCreature(options = {}) {
   function update(dt, pointerNDC, cameraPos = null, isARMode = false) {
     const safeDt = Math.min(Math.max(dt, 0.001), 0.05);
     animState.time += safeDt;
+
+    // Step emotion summation master engine
+    emotionEngine.step(safeDt);
+    if (animState.isPetting) {
+      emotionEngine.feedStimulus('pet', safeDt * 2.2);
+    }
+    if (animState.isRaining && !animState.hasUmbrella) {
+      emotionEngine.feedStimulus('rain_wet', safeDt * 0.45);
+    }
+    const emState = emotionEngine.getState();
+    setGlobalEmotionPitchMultiplier(emState.cutePitchMultiplier);
 
     if (faceViewerHoldTimer > 0) {
       faceViewerHoldTimer = Math.max(0, faceViewerHoldTimer - safeDt);
@@ -2009,7 +2049,7 @@ export function createBlobCreature(options = {}) {
     }
 
     for (const b of blushMeshes) {
-      const loveBoost = (act === 'love' || act === 'feed') ? 0.35 : 0.0;
+      const loveBoost = (act === 'love' || act === 'feed' || emState.affection > 0.7) ? (0.35 + (emState.affection - 0.7) * 0.4) : 0.0;
       const puffScaleX = 1.4 * (1.0 + puff * 1.25 + tickle * 0.25 + loveBoost);
       const puffScaleY = 0.75 * (1.0 + puff * 1.35 + tickle * 0.2 + loveBoost);
       const puffScaleZ = 0.35 * (1.0 + puff * 1.75 + tickle * 0.35 + loveBoost);
@@ -2021,17 +2061,18 @@ export function createBlobCreature(options = {}) {
       );
     }
 
-    if (act === 'love' || act === 'feed') {
+    if (act === 'love' || act === 'feed' || emState.affection > 0.75) {
       blushMat.color.set('#ff1e74');
-      blushMat.opacity = 0.96;
+      blushMat.opacity = Math.min(0.98, 0.75 + emState.affection * 0.23);
       irisMaterial.color.set('#6b21a8');
-    } else if (act === 'cry') {
+    } else if (act === 'cry' || emState.sorrow > 0.5) {
       blushMat.color.set('#ff80ab');
-      blushMat.opacity = 0.65;
+      blushMat.opacity = Math.min(0.85, 0.55 + emState.sorrow * 0.3);
       irisMaterial.color.set('#1e3a8a');
     } else {
       blushMat.color.set('#ff5c93');
-      blushMat.opacity = Math.min(0.96, 0.52 + talkVol * 0.3 + tickle * 0.4 + puff * 0.44);
+      const emBlush = 0.48 + emState.affection * 0.25 + emState.joy * 0.15 + talkVol * 0.2 + tickle * 0.35 + puff * 0.4;
+      blushMat.opacity = Math.min(0.96, emBlush);
       irisMaterial.color.set('#3d285c');
     }
 
@@ -2280,6 +2321,9 @@ export function createBlobCreature(options = {}) {
     resetPlacement,
     isPlaced: () => isPlaced,
     getAnchorPosition: () => anchorPos,
+    emotionEngine,
+    getEmotionEngine: () => emotionEngine,
+    feedEmotionStimulus: (type, intensity) => emotionEngine.feedStimulus(type, intensity),
     update
   };
 }

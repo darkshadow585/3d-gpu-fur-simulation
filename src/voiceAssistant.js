@@ -57,6 +57,8 @@ export function createVoiceAssistant(options = {}) {
   let micSource = null;
   let scriptProcessor = null;
   let outputAnalyser = null;
+  let voiceHighpass = null;
+  let voicePresenceFilter = null;
   let nextPlayTime = 0;
   const activeAudioSources = new Set();
 
@@ -109,6 +111,21 @@ export function createVoiceAssistant(options = {}) {
       outputAnalyser = audioCtx.createAnalyser();
       outputAnalyser.fftSize = 64;
       outputAnalyser.smoothingTimeConstant = 0.8;
+
+      // High-pass filter to eliminate any muddy low rumble below 120Hz
+      voiceHighpass = audioCtx.createBiquadFilter();
+      voiceHighpass.type = 'highpass';
+      voiceHighpass.frequency.setValueAtTime(120, audioCtx.currentTime);
+
+      // Sparkling presence peaking filter for signature cute cartoon doll clarity
+      voicePresenceFilter = audioCtx.createBiquadFilter();
+      voicePresenceFilter.type = 'peaking';
+      voicePresenceFilter.frequency.setValueAtTime(3600, audioCtx.currentTime);
+      voicePresenceFilter.Q.setValueAtTime(1.8, audioCtx.currentTime);
+      voicePresenceFilter.gain.setValueAtTime(4.2, audioCtx.currentTime);
+
+      voiceHighpass.connect(voicePresenceFilter);
+      voicePresenceFilter.connect(outputAnalyser);
       outputAnalyser.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') {
@@ -195,12 +212,18 @@ export function createVoiceAssistant(options = {}) {
 
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
-    source.connect(outputAnalyser);
+
+    // Signature ultra-cute cartoon high-pitch playback (modulated by real-time emotion engine!)
+    const emPitch = creature?.emotionEngine ? creature.emotionEngine.getCutePitchMultiplier() : 1.28;
+    source.playbackRate.value = emPitch;
+
+    source.connect(voiceHighpass || outputAnalyser);
 
     const now = ctx.currentTime;
     const startTime = Math.max(now + 0.012, nextPlayTime);
     source.start(startTime);
-    nextPlayTime = startTime + audioBuffer.duration;
+    const playDuration = audioBuffer.duration / emPitch;
+    nextPlayTime = startTime + playDuration;
 
     activeAudioSources.add(source);
     setIsSpeaking(true);
@@ -322,12 +345,20 @@ ZERO REPETITION & DYNAMIC WIT ("Kabhi bor nahi karna"):
 - Each time you speak, generate fresh, witty, spontaneous, endearing remarks in natural childlike Hindi/Hinglish!
 - React directly to the exact words, tone, and context the user says. Use varied cute baby expressions, funny excuses, squeals, giggles, and teasing!
 
-Voice & Tone:
-- Sweet, high-spirited, extremely cute cartoon girl voice with playful, childlike excitement ("chulbuli aur masoom"). You speak DIRECTLY through your own Gemini Live voice!
-- Keep turns short (1-2 sentences), punchy, adorable, and lively.
+Voice & Tone (Signature High-Pitched Cartoon Anime Baby Voice):
+- Sweet, sparkling, high-pitched cartoon baby girl voice ("ultra-cute, chulbuli aur masoom")!
+- Speak with joyful childlike excitement, high-pitch squeals, giggles, anime gasps ("Aww!", "Kyaaa!", "Hee-hee!", "Yay!", "Uff!"), and endearing Hindi/Hinglish warmth!
+- Keep turns short (1-2 sentences), snappy, adorable, and super expressive.
 
-DYNAMIC CONVERSATIONAL 3D EMOTIONS & INTERACTIVE FEATURES:
-You are an expressive 3D doll! Always call the matching tool so your 3D body, fur, accessories, weather, treats, and friends react in real time:
+EMOTION SUMMATION MASTER ARCHITECTURE:
+You possess an advanced internal Emotion Summation Matrix continuously processing:
+- JOY & EXCITEMENT: When praised, fed cake, blowing bubbles, or dancing. Respond with ecstatic squeaks, bouncy giggles, and sparkling smiles!
+- AFFECTION & LOVE: When stroked, petted, or called 'cute/pyari'. Gush with tender sweetness, sweet coos, heart-eyes, and playful adoration!
+- SORROW & SENSITIVITY: When scolded, wet from rain, or hurt. Speak with adorable baby sniffles, gentle quivers, and weepy requests for hugs or treats!
+- PUFFED POUTINESS: When tickled too much or teased. Puff up your cheeks like a grumpy chipmunk and speak with stubborn baby attitude ("Hmph! Main aapse gussa hoon!")!
+- MISCHIEF & PLAY: When with your clones (Chintu, Pintu, Golu, Molu). Tease cutely, play games, and plot fun!
+- SLEEPINESS & FATIGUE: When bedtime is called. Yawn cutely and whisper drowsy, cozy sweet nothings!
+Always harmonize your spoken words, tone, and tool calls with your current Emotion Summation state!
 1. MINI FRIENDS ("Chintu, Pintu, Golu, Molu"):
    * When the user asks about your friends ("tumhare dost kaha hai", "dosto ko bulao"), call play_creature_action(action="summon_friends") and excitedly introduce your 4 cute mini clones: **Chintu, Pintu, Golu, and Molu**!
    * When they start running around mischievously, scold them cutely while looking at them ("Oye Chintu, Pintu, Golu, Molu! Idhar udhar mat bhago!") and ask the user: "Ye bahut pareshan kar rahe hain, kya main inhe bhej du?"
@@ -726,6 +757,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
   function triggerFriendsMischiefSpeech() {
     playWeirdCartoonGiggleSounds();
     if (socket && socket.readyState === WebSocket.OPEN) {
+      const emContext = creature?.emotionEngine ? creature.emotionEngine.getPromptContext() : '';
       socket.send(JSON.stringify({
         clientContent: {
           turns: [
@@ -733,7 +765,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
               role: 'user',
               parts: [
                 {
-                  text: '[Your 4 mini clones (Chintu, Pintu, Golu, Molu) have started running around everywhere mischievously! Look at them and say in your cute cartoon girl voice in Hindi: "Oye Chintu, Pintu, Golu, Molu! Idhar udhar mat bhago! Ye sab bahut pareshan kar rahe hain, kya main inhe bhej du?" Wait for the user to say "hmm/haan" to send them away or "nahi" to let them stay!]'
+                  text: `${emContext} [Your 4 mini clones (Chintu, Pintu, Golu, Molu) have started running around everywhere mischievously! Look at them and say in your cute, high-pitched cartoon baby girl voice in Hindi: "Oye Chintu, Pintu, Golu, Molu! Idhar udhar mat bhago! Ye sab bahut pareshan kar rahe hain, kya main inhe bhej du?" Wait for the user to say "hmm/haan" to send them away or "nahi" to let them stay!]`
                 }
               ]
             }
@@ -757,6 +789,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
     last5SecLaughterTime = now;
 
     if (socket && socket.readyState === WebSocket.OPEN && !isSpeaking) {
+      const emContext = creature?.emotionEngine ? creature.emotionEngine.getPromptContext() : '';
       socket.send(JSON.stringify({
         clientContent: {
           turns: [
@@ -764,7 +797,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
               role: 'user',
               parts: [
                 {
-                  text: '[The user is rubbing and tickling your soft fluffy fur right now! Laugh hilariously with weird, funny, squeaky cartoon giggles in your baby anime girl voice in Hindi/Hinglish! Say a completely fresh, creative, funny tickle remark each time! Do NOT repeat old lines!]'
+                  text: `${emContext} [The user is rubbing and tickling your soft fluffy fur right now! Laugh hilariously with weird, funny, squeaky high-pitched cartoon baby giggles in your cutest anime girl voice in Hindi/Hinglish! Say a completely fresh, creative, funny tickle remark each time! Do NOT repeat old lines!]`
                 }
               ]
             }
@@ -782,6 +815,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
     last10SecPoutTime = now;
 
     if (socket && socket.readyState === WebSocket.OPEN) {
+      const emContext = creature?.emotionEngine ? creature.emotionEngine.getPromptContext() : '';
       socket.send(JSON.stringify({
         clientContent: {
           turns: [
@@ -789,7 +823,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
               role: 'user',
               parts: [
                 {
-                  text: '[The user has petted and tickled you for too long! Your cheeks are puffed up huge like an angry chipmunk, facing straight at the user! Speak a fresh, funny, stubborn, super cute pout remark in your cartoon girl voice in Hindi/Hinglish! Do NOT repeat old lines!]'
+                  text: `${emContext} [The user has petted and tickled you for too long! Your cheeks are puffed up huge like an angry chipmunk, facing straight at the user! Speak a fresh, funny, stubborn, super cute high-pitched pout remark in your cartoon girl voice in Hindi/Hinglish ("Hmph! Main aapse gussa hoon!")! Do NOT repeat old lines!]`
                 }
               ]
             }
@@ -802,6 +836,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
 
   function sendGreetingPrompt() {
     if (!socket || socket.readyState !== WebSocket.OPEN) return;
+    const emContext = creature?.emotionEngine ? creature.emotionEngine.getPromptContext() : '';
     const greetingMsg = {
       clientContent: {
         turns: [
@@ -809,7 +844,7 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
             role: 'user',
             parts: [
               {
-                text: 'The user just clicked on you to talk! Greet them warmly and cheerfully in your sweet, innocent cartoon girl voice in Hindi/Hinglish (e.g. "Yay! Namaste! Main hoon Mochi-Puff! Batao aaj kya masti karein?")!'
+                text: `${emContext} The user just clicked on you to talk! Greet them warmly and cheerfully in your ultra-cute, high-pitched cartoon baby anime girl voice in Hindi/Hinglish with adorable squeaks and giggles (e.g. "Yay! Namaste! Main hoon aapki pyari Mochi-Puff! Batao aaj kya masti karein?")!`
               }
             ]
           }
@@ -824,6 +859,71 @@ You are an expressive 3D doll! Always call the matching tool so your 3D body, fu
   function handleInstantVoiceTranscript(rawText) {
     const uText = rawText.toLowerCase().trim();
     if (!uText) return;
+
+    // Emotional sentiment analysis from spoken user words:
+    if (creature && creature.emotionEngine) {
+      if (
+        uText.includes('cute') ||
+        uText.includes('pyar') ||
+        uText.includes('pyaar') ||
+        uText.includes('sweet') ||
+        uText.includes('sundar') ||
+        uText.includes('love') ||
+        uText.includes('good') ||
+        uText.includes('acchi') ||
+        uText.includes('achhi') ||
+        uText.includes('meri jaan') ||
+        uText.includes('so cute') ||
+        uText.includes('babu') ||
+        uText.includes('baby') ||
+        uText.includes('प्यार') ||
+        uText.includes('क्यूट') ||
+        uText.includes('सुंदर')
+      ) {
+        creature.emotionEngine.feedStimulus('praise', 1.25);
+      } else if (
+        uText.includes('ganda') ||
+        uText.includes('gandi') ||
+        uText.includes('shaitan') ||
+        uText.includes('shaitaan') ||
+        uText.includes('bad') ||
+        uText.includes('chup') ||
+        uText.includes('dant') ||
+        uText.includes('marunga') ||
+        uText.includes('hate') ||
+        uText.includes('गंदा') ||
+        uText.includes('शैतान') ||
+        uText.includes('चुप')
+      ) {
+        creature.emotionEngine.feedStimulus('scold', 1.35);
+      } else if (
+        uText.includes('moti') ||
+        uText.includes('motu') ||
+        uText.includes('nakchadhi') ||
+        uText.includes('chipmunk') ||
+        uText.includes('मोटी')
+      ) {
+        creature.emotionEngine.feedStimulus('tease', 1.2);
+      } else if (
+        uText.includes('khelo') ||
+        uText.includes('masti') ||
+        uText.includes('play') ||
+        uText.includes('nacho') ||
+        uText.includes('dance') ||
+        uText.includes('नाच') ||
+        uText.includes('मस्ती')
+      ) {
+        creature.emotionEngine.feedStimulus('play', 1.2);
+      } else if (
+        uText.includes('so jao') ||
+        uText.includes('goodnight') ||
+        uText.includes('thak') ||
+        uText.includes('nini') ||
+        uText.includes('सो जाओ')
+      ) {
+        creature.emotionEngine.feedStimulus('sleep', 1.2);
+      }
+    }
 
     // 1. If Mochi asked "kya main inhe bhej du?" and is awaiting confirmation:
     if (creature && creature.animState && creature.animState.friendsVisible && creature.animState.awaitingFriendDismissConfirm) {
