@@ -428,8 +428,7 @@ function isEventOnUIOverlay(e) {
       e.target.closest('#page-nav') ||
       e.target.closest('#scene-nav') ||
       e.target.closest('#mobile-controls-btn') ||
-      e.target.closest('#mobile-sheet-backdrop') ||
-      e.target.closest('#voice-transcript-bubble'))
+      e.target.closest('#mobile-sheet-backdrop'))
   );
 }
 
@@ -510,7 +509,8 @@ window.addEventListener('pointerup', (e) => {
       }
     }
 
-    const hits = raycaster.intersectObject(creature.bodyMesh, false);
+    const targets = [creature.bodyMesh, creature.root].filter(Boolean);
+    const hits = targets.length > 0 ? raycaster.intersectObjects(targets, true) : [];
     const isDollClicked = hits.length > 0 || isPointerOverCreature;
 
     // 2. Also check if user clicked one of the 4 mini friends (Chintu, Pintu, Golu, Molu)!

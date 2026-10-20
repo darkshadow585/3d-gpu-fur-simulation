@@ -2288,6 +2288,7 @@ export function createBlobCreature(options = {}) {
 
   return {
     root,
+    group: root,
     friendsContainer,
     rainContainer,
     bubblesContainer,
