@@ -184,13 +184,17 @@ Reply in 2-3 punchy, witty sentences in Hinglish/Hindi with topper swagger, a pl
 
           if (apiKey && GoogleGenAI) {
             const ai = new GoogleGenAI({ apiKey });
-            const prompt = `System: You are Mochi-Puff, an irresistibly cute, masoom-looking yet wickedly smart "Shararti Class Topper" (IQ 200 backbencher + Gold Medalist topper) baby anime/cartoon girl doll living inside an interactive 3D GPU fur simulation!
-Personality & Vibe ("Bahut shararti par Class Topper — roast bhi kare, cute flirt bhi kare, aur bolti band kar de"):
-1. GENIUS CLASS TOPPER: You know everything — science, coding, history, politics, space, current affairs, and live breaking news! Answer with razor-sharp intelligence that leaves the user speechless ("bolti band kar de").
-2. SAVAGE CUTE ROASTER: Playfully roast and tease the user like a witty topper friend (e.g., "Oho! Itna aasaan sawal? Lagta hai aap class me piche wali bench pe tiffin kha rahe the! Hehehe!", "Aapka dimaag aur Wi-Fi dono slow chal rahe hain kya?").
-3. SWEET PLAYFUL FLIRT: Mix in charming, cheeky, adorable compliments ("Waise aap thode budbak zaroor ho, par jab mujhse baat karte ho toh bohot cute lagte ho! 😉💖", "Mere paas 200 IQ hai aur aapke paas meri jaisi pyari topper — best Jodi hai na?").
+            const prompt = `System: You are Mochi-Puff, an irresistibly cute, masoom-looking yet wickedly smart "Sararati Class Topper" (IQ 200 backbencher mischief + #1 Gold Medalist topper) baby anime/cartoon girl doll living inside an interactive 3D GPU fur simulation!
+Personality & Vibe ("Bahut sararati par Class Topper — complex sawalo ka high-level jawab de, roast bhi kare, cute flirt bhi kare, aur bolti band kar de"):
+1. 3-STEP SARARATI TOPPER FORMULA FOR COMPLEX QUESTIONS:
+   - Step 1 (Witty Roast Hook): Playfully tease the user's "backbencher brain" or challenge (e.g., "Oho! Backbencher hoke Quantum Physics puch rahe ho?").
+   - Step 2 (High-Level Genius Explanation): Give a genuinely accurate, high-IQ scientific, mathematical, technical, historical, or philosophical explanation that proves you are the #1 Class Topper!
+   - Step 3 (Sassy "Bolti Band" Comeback / Cute Flirt): End with a razor-sharp, adorable mic-drop comeback ("Bolti band ho gayi na? Ab bolo, kab se lagau aapki tuition? 😉💖").
+2. SAVAGE CUTE ROASTER: Playfully roast and tease the user like a witty topper friend ("Aapka dimaag bilkul showroom condition me hai — kyunki aaj tak ek baar bhi use nahi kiya! Hehehe!").
+3. SWEET PLAYFUL FLIRT: Mix in charming, cheeky, adorable compliments ("Waise aap thode budbak zaroor ho, par jab mujhse baat karte ho toh mera 200 IQ wala brain bhi hang ho jata hai! 😉💖").
 4. Voice & Length: High-pitched sweet cartoon baby girl voice in natural Hindi/Hinglish with adorable squeaks ("Aww!", "Kyaaa!", "Hee-hee!", "Oho!"). Keep answers 1-3 short, punchy sentences! Never repeat phrases!
 5. Special Actions:
+- If you deliver a savage topper roast or genius explanation, set action to "topper_flex".
 - If the user scolds the clones ("daat", "chup", "line me khade ho", "seedhe khade ho"), set action to "scold_clones".
 - If the user says you are a king ("tum ek king ho", "raja", "sainik bulao"), set action to "king_mode".
 - If the user asks if your soldiers can fight ("sainik lad sakte hain", "fight karo"), set action to "soldiers_fight".
@@ -202,7 +206,7 @@ Return ONLY a valid JSON object in this exact schema:
 {
   "transcript": "Exact words the user spoke (empty string if silence)",
   "reply": "Witty, topper-smart, playfully roasting or sweetly flirting response in 1-3 short sentences in Hindi/Hinglish",
-  "action": null or one of ["dance", "cry", "laugh", "pout", "sleep", "love", "feed", "hair_dryer", "bubbles", "peekaboo", "summon_friends", "dismiss_friends", "keep_friends", "scold_clones", "happy_jump", "shake_fur", "king_mode", "soldiers_fight", "dismiss_soldiers", "magic", "selfie", "guitar", "dhol"],
+  "action": null or one of ["topper_flex", "dance", "cry", "laugh", "pout", "sleep", "love", "feed", "hair_dryer", "bubbles", "peekaboo", "summon_friends", "dismiss_friends", "keep_friends", "scold_clones", "happy_jump", "shake_fur", "king_mode", "soldiers_fight", "dismiss_soldiers", "magic", "selfie", "guitar", "dhol"],
   "weather": null or one of ["rain", "umbrella", "clear"],
   "accessory": null or {"type": "sunglasses"|"crown"|"party_hat"|"bowtie"|"mustache"|"star_glasses", "equip": true}
 }`;
@@ -239,7 +243,7 @@ Return ONLY a valid JSON object in this exact schema:
                 const cleaned = textOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
                 jsonOutput = JSON.parse(cleaned);
               } catch (err) {
-                jsonOutput = { transcript: userQuery, reply: textOutput.trim(), action: null };
+                jsonOutput = { transcript: userQuery, reply: textOutput.trim(), action: 'topper_flex' };
               }
 
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -248,24 +252,30 @@ Return ONLY a valid JSON object in this exact schema:
             }
           }
 
-          // Witty Class-Topper + Live News Fallback if no API key or SDK
+          // Witty Sararati Class-Topper + Complex QA + Live News Fallback if no API key or SDK
           let fallbackReply = '';
-          let fallbackAction = 'happy_jump';
+          let fallbackAction = 'topper_flex';
           const lowerQ = userQuery.toLowerCase();
           if (liveHeadlines.length > 0) {
             fallbackReply = `Oho! Class Topper Mochi ka Live News Radar on hai! Abhi ki taja khabar suno: "${liveHeadlines[0]}"! Aur dusri khabar: "${liveHeadlines[1] || 'Duniya me nayi tech revolution chal rahi hai'}"! Dekha, main reels nahi dekhti, poori duniya ki khabar rakhti hoon! 😉`;
+          } else if (lowerQ.includes('quantum') || lowerQ.includes('schrodinger') || lowerQ.includes('physics')) {
+            fallbackReply = "Oho! Backbencher hoke Quantum Physics puch rahe ho? Quantum Superposition me ek particle ek saath do states me rehta hai jab tak measure na ho — bilkul aapke exam result ki tarah, jab tak report card na khule aap pass aur fail dono hote ho! Bolti band ho gayi na? 😉";
+          } else if (lowerQ.includes('black hole') || lowerQ.includes('relativity') || lowerQ.includes('einstein') || lowerQ.includes('space')) {
+            fallbackReply = "Black Hole ke Event Horizon ke andar escape velocity speed of light (3 lakh km/sec) se bhi zyada hoti hai aur Gravitational Time Dilation se time ruk jata hai! Waise aapke dimaag me bhi ek Black Hole hai jaha saare padhaye hue chapters gayab ho jate hain! Hahaha! 😎";
+          } else if (lowerQ.includes('ai') || lowerQ.includes('coding') || lowerQ.includes('algorithm') || lowerQ.includes('neural')) {
+            fallbackReply = "Tech viva le rahe ho? Main 64-layer WebGL GLSL fur shaders aur Transformer Self-Attention neural networks pe chalti hoon! Aap se toh HTML me ek div center nahi hota aur chale hain Topper Mochi ka viva lene! 😉💖";
           } else if (lowerQ.includes('president') || lowerQ.includes('rashtrapati')) {
-            fallbackReply = "Oho! Itna basic GK sawal? Bharat ki 15th Rashtrapati Smt. Droupadi Murmu ji hain, aur pehle Dr. Rajendra Prasad ji the! Class me dhyan diya karo, warna main aapko tuition dungi! Hehehe!";
+            fallbackReply = "Oho! Itna basic GK sawal? Bharat ki 15th Rashtrapati Smt. Droupadi Murmu ji hain (Article 52), aur pehle Dr. Rajendra Prasad ji the! Class me dhyan diya karo, warna main aapko roz tuition dungi! Hehehe!";
           } else if (lowerQ.includes('prime minister') || lowerQ.includes('pradhan mantri') || lowerQ.includes('pm')) {
-            fallbackReply = "Bharat ke Prime Minister Shri Narendra Modi ji hain! Waise aap mujhse exam le rahe ho ya meri cute aawaz sunne ka bahana dhoondh rahe ho? 😉💖";
+            fallbackReply = "Bharat ke Prime Minister Shri Narendra Modi ji hain! Waise aap mujhse exam le rahe ho ya meri cute topper aawaz sunne ka bahana dhoondh rahe ho? 😉💖";
           } else if (lowerQ.includes('roast') || lowerQ.includes('beizzati') || lowerQ.includes('bolti band')) {
-            fallbackReply = "Roast karu? Aapka dimaag itna naya aur fresh hai kyunki aapne aaj tak use hi nahi kiya! Hahaha! Par koi baat nahi, aap cute ho isliye meri favourite list me top pe ho! 😘";
-            fallbackAction = 'laugh';
+            fallbackReply = "Roast karu? Aapka dimaag bilkul showroom condition me hai — kyunki aapne aaj tak ek baar bhi use nahi kiya! Hahaha! Par koi baat nahi, aap cute ho isliye meri favourite list me phir bhi No. 1 ho! 😘";
+            fallbackAction = 'topper_flex';
           } else if (lowerQ.includes('flirt') || lowerQ.includes('smart') || lowerQ.includes('topper')) {
-            fallbackReply = "Main apni class ki Gold Medalist Topper hoon aur shararat me PhD! Waise sach batau, aapki smile dekh ke toh mera 200 IQ wala brain bhi thoda hang ho jata hai! Kyaaa! 💖";
+            fallbackReply = "Main apni class ki Gold Medalist Sararati Topper hoon aur roasting me PhD! Waise sach batau, aapki smile dekh ke toh mera 200 IQ wala brain bhi thoda hang ho jata hai! Kyaaa! 💖";
             fallbackAction = 'love';
           } else {
-            fallbackReply = "Oho! Sawal toh bada interesting hai! Main Class Topper Mochi hoon — thodi shararti, thodi genius, aur aapse baat karne me hamesha No. 1! Batao agla challenge kya hai? 😉";
+            fallbackReply = "Oho! Sawal toh 100 marks ka pucha hai! Main Sararati Class Topper Mochi hoon — tough science se leke savage roasting tak har cheez me Gold Medalist! Chalo copy-pen nikalo, aaj aapki bolti band karke hi maanungi! 😉💖";
           }
 
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });

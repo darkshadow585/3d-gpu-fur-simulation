@@ -597,8 +597,11 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 9. 3D MAGIC WAND, LEVITATION & BUTTERFLIES ('magic').
 10. 3D SELFIE CAMERA POSE & FUNNY PROPS ('selfie').
 11. 3D MUSICAL CONCERT WITH GUITAR & DHOL ('guitar', 'dhol').
-12. ENCYCLOPEDIC TOPPER KNOWLEDGE, ROASTING & FLIRTING:
-   * For general questions, riddles, roasts, or flirting that don't need live news search, answer immediately in spoken audio with your IQ-200 Class Topper wit, playful roast, and sweet charm!`;
+12. SARARATI TOPPER COMPLEX Q&A, WITTY ROASTING & FLIRTING ('topper_flex'):
+   * When the user asks complex questions (Quantum Physics, Black Holes, Relativity, AI/Coding, Calculus, Biology/DNA, Economics, Space, Philosophy, or Riddles) or asks you to roast them, ALWAYS use the 3-Step Sararati Topper Formula:
+     1) Witty Roast Hook: Tease their "backbencher brain" or playful challenge ("Oho! Backbencher hoke Quantum Physics puch rahe ho?"),
+     2) High-Level Genius Explanation: Give a genuinely smart, accurate, high-IQ explanation that proves you're the #1 Gold Medalist Topper,
+     3) Sassy "Bolti Band" Comeback / Cute Flirt: End with a mic-drop comeback ("Bolti band ho gayi na? Ab bolo, kab se lagau aapki tuition? 😉💖") and optionally call play_creature_action(action="topper_flex")!`;
 
     const tools = [
       {
@@ -695,13 +698,14 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
             - 'magic': Equips 3D Star Magic Wand, levitates Mochi in the air with a glowing magic circle, and summons 7 colorful fluttering 3D butterflies! ('jadoo dikhao', 'magic karo', 'butterfly', 'titli')
             - 'selfie': Strikes a cute model pose with funny props (sunglasses, bowtie, mustache), raises a 3D vintage camera, and triggers a bright studio flash! ('selfie lete hain', 'photo khicho', 'camera pose')
             - 'guitar': Plays a 3D rockstar guitar concert with floating musical notes! ('guitar bajao', 'concert')
-            - 'dhol': Plays a festive 3D Punjabi Dhol drum with Bhangra beats and floating musical notes! ('dhol bajao', 'bhangra')`,
+            - 'dhol': Plays a festive 3D Punjabi Dhol drum with Bhangra beats and floating musical notes! ('dhol bajao', 'bhangra')
+            - 'topper_flex': Equips cool topper sunglasses, does a sassy genius bounce & giggle while roasting the user or flexing 200-IQ topper knowledge!`,
             parameters: {
               type: 'OBJECT',
               properties: {
                 action: {
                   type: 'STRING',
-                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'feed', 'hair_dryer', 'bubbles', 'summon_friends', 'dismiss_friends', 'keep_friends', 'scold_clones', 'play_ball', 'shake_fur', 'happy_jump', 'king_mode', 'soldiers_fight', 'dismiss_soldiers', 'magic', 'selfie', 'guitar', 'dhol'],
+                  enum: ['dance', 'stop', 'cry', 'laugh', 'pout', 'sleep', 'love', 'peekaboo', 'feed', 'hair_dryer', 'bubbles', 'summon_friends', 'dismiss_friends', 'keep_friends', 'scold_clones', 'play_ball', 'shake_fur', 'happy_jump', 'king_mode', 'soldiers_fight', 'dismiss_soldiers', 'magic', 'selfie', 'guitar', 'dhol', 'topper_flex'],
                   description: "Action name"
                 }
               },
@@ -1190,6 +1194,22 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
         setTimeout(() => creature.triggerBoop(), 280);
         setTimeout(() => creature.triggerBoop(), 560);
         break;
+      }
+      case 'topper_flex': {
+        if (creature.emotionEngine) {
+          creature.emotionEngine.feedStimulus('topper_swag', 1.4);
+        }
+        if (creature.toggleAccessory) {
+          creature.toggleAccessory('sunglasses', true);
+        }
+        if (creature.playAction) {
+          creature.playAction('laugh', 3.0);
+        }
+        creature.triggerBoop();
+        setTimeout(() => creature.triggerBoop(), 260);
+        playAccessoryEquipSound();
+        playWeirdCartoonGiggleSounds();
+        return 'Mochi put on her cool Sararati Topper sunglasses and flexed her 200-IQ swagger!';
       }
       default:
         creature.triggerBoop();
@@ -1824,11 +1844,12 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     const reqSessionId = sessionGenerationId;
     showTranscript('user', text);
 
-    // 1. Instant encyclopedic QA (e.g. President of India, PM of India, GK)
+    // 1. Instant encyclopedic & Sararati Topper QA (Quantum Physics, Black Holes, AI, Maths, Roasts, GK)
     const instant = findInstantQA(text);
     if (instant) {
       if (creature && creature.emotionEngine) {
-        creature.emotionEngine.feedStimulus('praise', 1.25);
+        const stim = instant.emotion === 'topper_swag' ? 'topper_swag' : 'praise';
+        creature.emotionEngine.feedStimulus(stim, 1.35);
       }
       if (instant.action && executeCreatureAction) {
         executeCreatureAction(instant.action);

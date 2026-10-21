@@ -14,7 +14,8 @@ export function createEmotionEngine() {
     affection: 0.55,
     sorrow: 0.04,
     poutiness: 0.04,
-    playfulness: 0.60,
+    playfulness: 0.65,
+    topperSwag: 0.72,
     energy: 0.85,
     comfort: 0.82
   };
@@ -25,12 +26,13 @@ export function createEmotionEngine() {
     affection: 0.50,
     sorrow: 0.04,
     poutiness: 0.04,
-    playfulness: 0.55,
+    playfulness: 0.60,
+    topperSwag: 0.68,
     energy: 0.80,
     comfort: 0.80
   };
 
-  let dominant = 'SWEET_CHEERFUL';
+  let dominant = 'SHARARTI_TOPPER_SWAG';
   let valence = 0.5; // [-1.0 .. +1.0]
   let arousal = 0.55; // [0.0 .. 1.0]
   let cutePitchMultiplier = 1.28; // High-pitched cartoon baby girl voice baseline
@@ -104,8 +106,18 @@ export function createEmotionEngine() {
       case 'praise':
         state.affection = Math.min(1.0, state.affection + 0.42 * k);
         state.joy = Math.min(1.0, state.joy + 0.32 * k);
+        state.topperSwag = Math.min(1.0, state.topperSwag + 0.25 * k);
         state.sorrow = Math.max(0.0, state.sorrow - 0.45 * k);
         state.poutiness = Math.max(0.0, state.poutiness - 0.35 * k);
+        break;
+
+      case 'topper_swag':
+      case 'intellectual_roast':
+      case 'roast':
+        state.topperSwag = Math.min(1.0, state.topperSwag + 0.45 * k);
+        state.playfulness = Math.min(1.0, state.playfulness + 0.35 * k);
+        state.joy = Math.min(1.0, state.joy + 0.28 * k);
+        state.sorrow = Math.max(0.0, state.sorrow - 0.40 * k);
         break;
 
       case 'scold':
@@ -118,6 +130,7 @@ export function createEmotionEngine() {
       case 'tease':
         state.poutiness = Math.min(1.0, state.poutiness + 0.42 * k);
         state.playfulness = Math.min(1.0, state.playfulness + 0.18 * k);
+        state.topperSwag = Math.min(1.0, state.topperSwag + 0.22 * k);
         break;
 
       case 'play':
@@ -161,6 +174,7 @@ export function createEmotionEngine() {
       sorrow: 0.24, // Sorrow naturally fades as comfort returns
       poutiness: 0.20,
       playfulness: 0.14,
+      topperSwag: 0.10,
       energy: 0.05,
       comfort: 0.10
     };
@@ -198,6 +212,8 @@ export function createEmotionEngine() {
       dominant = 'PUFFED_POUT';
     } else if (state.energy < 0.32) {
       dominant = 'SLEEPY_COZY';
+    } else if (state.topperSwag > 0.74 && state.playfulness > 0.62) {
+      dominant = 'SHARARTI_TOPPER_SWAG';
     } else if (state.affection > 0.72) {
       dominant = 'OVERJOYED_LOVE';
     } else if (state.playfulness > 0.72) {
@@ -214,7 +230,7 @@ export function createEmotionEngine() {
     let pitchMod = 0.0;
     if (dominant === 'OVERJOYED_LOVE' || dominant === 'EUPHORIC_JOY') {
       pitchMod = 0.05;
-    } else if (dominant === 'MISCHIEVOUS_CHULBULI') {
+    } else if (dominant === 'SHARARTI_TOPPER_SWAG' || dominant === 'MISCHIEVOUS_CHULBULI') {
       pitchMod = 0.04;
     } else if (dominant === 'MELODRAMATIC_CRY') {
       pitchMod = -0.06;
@@ -236,9 +252,13 @@ export function createEmotionEngine() {
     const sorPct = Math.round(state.sorrow * 100);
     const poutPct = Math.round(state.poutiness * 100);
     const playPct = Math.round(state.playfulness * 100);
+    const swagPct = Math.round(state.topperSwag * 100);
 
     let desc = '';
     switch (dominant) {
+      case 'SHARARTI_TOPPER_SWAG':
+        desc = `You are in FULL 'SARARATI CLASS TOPPER' SWAG MODE (${swagPct}% topper IQ swagger, ${playPct}% mischief)! Roast the user with witty, intelligent comebacks ("bolti band kar de") while effortlessly answering complex questions with high-level genius knowledge and cheeky charm!`;
+        break;
       case 'OVERJOYED_LOVE':
         desc = `You are feeling OVERFLOWING LOVE & AFFECTION (${affPct}% affection, ${joyPct}% joy)! You feel deeply adored and cherished. Speak with bubbly happy giggles, heart-filled warmth, and sweet squeals!`;
         break;
@@ -252,17 +272,17 @@ export function createEmotionEngine() {
         desc = `You are feeling CUTE PUFFED POUTINESS (${poutPct}% pout)! Your cheeks are puffed up like an angry chipmunk. Speak with funny, stubborn baby attitude ("Hmph! Main gussa hoon!"), adorable teasing, and squeaky huffs!`;
         break;
       case 'MISCHIEVOUS_CHULBULI':
-        desc = `You are feeling MISCHIEVOUS & PLAYFUL (${playPct}% mischief)! You and your clones (Chintu, Pintu, Golu, Molu) want to play and make fun trouble. Speak with chulbuli cartoon wit, teasing excuses, and chuckles!`;
+        desc = `You are feeling MISCHIEVOUS & PLAYFUL (${playPct}% mischief)! You and your clones (Chintu, Pintu, Golu, Molu, Bholu) want to play and make fun trouble. Speak with chulbuli cartoon wit, teasing excuses, and chuckles!`;
         break;
       case 'SLEEPY_COZY':
         desc = `You are feeling SLEEPY & COZY (low energy, high comfort)! You are yawning and snuggly. Speak with sweet, soft, drowsy murmurs and cute little yawns!`;
         break;
       default:
-        desc = `You are in your sweet, cheerful, innocent cartoon baby state (${joyPct}% joy, ${affPct}% affection). Ready for fun, smiling warmly!`;
+        desc = `You are in your sweet, cheerful, shararti topper cartoon baby state (${joyPct}% joy, ${swagPct}% topper IQ). Ready to answer any tough question and roast playfully!`;
         break;
     }
 
-    return `[CURRENT EMOTIONAL SUMMATION MASTER: Dominant=${dominant}, Joy=${joyPct}%, Affection=${affPct}%, Sorrow=${sorPct}%, Pout=${poutPct}%, Play=${playPct}%. ${desc}]`;
+    return `[CURRENT EMOTIONAL SUMMATION MASTER: Dominant=${dominant}, TopperSwag=${swagPct}%, Joy=${joyPct}%, Affection=${affPct}%, Sorrow=${sorPct}%, Pout=${poutPct}%, Play=${playPct}%. ${desc}]`;
   }
 
   return {
