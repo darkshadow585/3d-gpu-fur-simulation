@@ -1201,10 +1201,124 @@ export function playScoldShockSound() {
   } catch (e) {}
 }
 
+export function playHologramProjectSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Futuristic sci-fi hologram hum + shimmering crystal arpeggio
+    const freqs = [440, 659.25, 880, 1318.5, 1760];
+    freqs.forEach((f, idx) => {
+      const t = now + idx * 0.048;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(f * 0.9, t);
+      osc.frequency.exponentialRampToValueAtTime(f * 1.12, t + 0.22);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.28);
+    });
+    triggerVocalMouthBounce(0.55, 380);
+  } catch (e) {}
+}
+
+export function playChalkBoardWriteSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Quick rhythmic chalk tap-tap-tap on blackboard
+    const taps = [0.0, 0.06, 0.13, 0.19, 0.27];
+    taps.forEach((offset, i) => {
+      const t = now + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(1400 + (i % 3) * 320, t);
+      osc.frequency.exponentialRampToValueAtTime(480, t + 0.035);
+      gain.gain.setValueAtTime(0.22, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.045);
+    });
+    triggerVocalMouthBounce(0.5, 320);
+  } catch (e) {}
+}
+
+export function playVivaMedalSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Bright Gold Medal victory chime (C5 -> E5 -> G5 -> B5 -> C6)
+    const notes = [523.25, 659.25, 783.99, 987.77, 1046.5];
+    notes.forEach((freq, idx) => {
+      const t = now + idx * 0.065;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.26, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.34);
+    });
+    triggerVocalMouthBounce(0.75, 480);
+  } catch (e) {}
+}
+
+export function playVivaRoastBuzzerSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    // Playful cartoon "Wah-wah!" descend + cheeky giggle squeak
+    const slides = [
+      { t: 0.0, fStart: 440, fEnd: 370 },
+      { t: 0.16, fStart: 370, fEnd: 260 }
+    ];
+    slides.forEach((s) => {
+      const t = now + s.t;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(s.fStart, t);
+      osc.frequency.linearRampToValueAtTime(s.fEnd, t + 0.14);
+      gain.gain.setValueAtTime(0.16, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.16);
+    });
+    playSyllable(ctx, {
+      startTime: now + 0.32,
+      duration: 0.16,
+      f0Start: 880,
+      f0End: 1320,
+      formantFreq: 2400,
+      gainPeak: 0.35,
+      type: 'sine',
+      vibratoDepth: 18
+    });
+    triggerVocalMouthBounce(0.7, 500);
+  } catch (e) {}
+}
+
 export function getActiveVocalEnvelope() {
   return activeVocalEnvelope;
 }
-
-
-
-

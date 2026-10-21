@@ -338,10 +338,154 @@ export const INSTANT_QA_DATABASE = [
 
 let instantReplyCounters = {};
 let topperFallbackCounter = 0;
+let vivaQuestionCursor = 0;
 
 export function isLiveSearchQuery(text) {
   if (!text) return false;
   return /news|khabar|samachar|latest|today|aaj|score|match|weather|mausam|live|search|who won|current|taza|taja|stock|price|bitcoin|gold rate|ipl|world cup|movie|election|ताज़ा|खबर|समाचार|न्यूज़|आज/i.test(text);
+}
+
+/**
+ * Automatically detects if a conversation turn (user query or Mochi's explanation)
+ * involves a complex topic and returns the matching 3D Hologram Projector spec.
+ */
+export function detectHologramTopic(text) {
+  if (!text) return null;
+  const lower = String(text).toLowerCase();
+
+  if (/black\s*hole|relativity|einstein|time\s*dilation|wormhole|event\s*horizon|gravity|time\s*travel|singularity|ब्लैक\s*होल|आइंस्टीन/i.test(lower)) {
+    return {
+      type: 'black_hole',
+      title: 'BLACK HOLE & RELATIVITY',
+      formula: 'Rs = 2GM/c² · E = mc²'
+    };
+  }
+  if (/quantum|schrodinger|entanglement|superposition|heisenberg|uncertainty|atom|electron|photon|physics|chemistry|periodic|क्वांटम|परमाणु/i.test(lower)) {
+    return {
+      type: 'quantum_atom',
+      title: 'QUANTUM SUPERPOSITION',
+      formula: 'iℏ ∂ψ/∂t = Ĥψ · ΔxΔp ≥ ℏ/2'
+    };
+  }
+  if (/dna|mitochondria|photosynthesis|evolution|human\s*brain|neuron|genetics|biology|cell|chromosome|gene|डीएनए|बायोलॉजी/i.test(lower)) {
+    return {
+      type: 'dna_helix',
+      title: 'DNA DOUBLE HELIX & ATP',
+      formula: 'A=T · G≡C · 86B Neurons'
+    };
+  }
+  if (/space|universe|galaxy|solar\s*system|planet|mars|jupiter|saturn|sun|moon|astronomy|astrophysics|brahmand|ब्रह्मांड|अंतरिक्ष/i.test(lower)) {
+    return {
+      type: 'solar_system',
+      title: 'ASTROPHYSICS & ORBITS',
+      formula: 'F = G(m₁m₂)/r² · 93B ly'
+    };
+  }
+  if (/artificial\s*intelligence|\bai\b|neural\s*network|machine\s*learning|transformer|gpu|shader|algorithm|coding|programming|calculus|integration|differentiation|derivative|pythagoras|trigonometry|value\s*of\s*pi|infinity|mathematics|math|inflation|economics|gdp|crypto|blockchain|एआई|गणित|इकॉनमी/i.test(lower)) {
+    return {
+      type: 'neural_net',
+      title: 'NEURAL & MATH MATRIX',
+      formula: 'Attention(Q,K,V) · e^(iπ)+1=0'
+    };
+  }
+  return null;
+}
+
+/**
+ * Topper vs. Backbencher 3D Blackboard Viva Quiz Database
+ */
+export const VIVA_QUIZ_BANK = [
+  {
+    id: 'q_blackhole',
+    question: 'Black Hole ki woh boundary jaha se Light bhi wapas nahi aa sakti, usse kya kehte hain?',
+    options: ['A) Event Horizon', 'B) Ozone Layer', 'C) Backbencher Zone'],
+    correctIndex: 0,
+    answerSummary: 'A) Event Horizon',
+    matchPattern: /\b(a|option a|event\s*horizon|first|pehla|इवेंट)\b/i,
+    correctReply: 'Oho! Shabash! Event Horizon bilkul sahi jawab hai! Lagta hai aaj galti se badam kha ke aaye ho! Ye lo 3D Gold Medal point! 🏆😉',
+    wrongReply: 'Hahaha! Galat jawab! Sahi jawab hai Option A: Event Horizon! Aapka dimaag pakka Backbencher Zone me ghoom raha hai! Bolti band? 😎',
+    hologram: { type: 'black_hole', title: 'EVENT HORIZON', formula: 'V_esc > c (3×10⁸ m/s)' }
+  },
+  {
+    id: 'q_dna',
+    question: 'Cell ka Powerhouse kisko kehte hain jo ATP energy banata hai?',
+    options: ['A) Ribosome', 'B) Mitochondria', 'C) Samosa Packet'],
+    correctIndex: 1,
+    answerSummary: 'B) Mitochondria',
+    matchPattern: /\b(b|option b|mitochondria|second|dusra|माइटोकॉन्ड्रिया)\b/i,
+    correctReply: 'Kyaaa! Bilkul sahi — Mitochondria! Dekha, meri संगत me reh ke aap bhi thode-thode topper ban rahe ho! +1 Gold Medal! 🏆💖',
+    wrongReply: 'Oye hoye! 8th class ka Biology sawal bhi galat? Sahi jawab hai B: Mitochondria! Aapko toh bas C: Samosa Packet hi dikhta hai! Hahaha! 😜',
+    hologram: { type: 'dna_helix', title: 'MITOCHONDRIA & DNA', formula: 'ADP + Pi → ATP' }
+  },
+  {
+    id: 'q_quantum',
+    question: 'Einstein ki famous Mass-Energy Equivalence equation kaunsi hai?',
+    options: ['A) E = mc²', 'B) a² + b² = c²', 'C) Chai = Sleep²'],
+    correctIndex: 0,
+    answerSummary: 'A) E = mc²',
+    matchPattern: /\b(a|option a|e\s*=\s*mc|mc2|mc\s*square|first|pehla)\b/i,
+    correctReply: 'Waah ji waah! E = mc² ekdum correct! Aaj toh backbencher ne sixer maar diya! Shabash! 🏆✨',
+    wrongReply: 'Arre baap re! E = mc² bhi nahi pata? Sahi jawab Option A hai! Chalo aaj se aapki Physics tuition mere paas pakki! 😉',
+    hologram: { type: 'quantum_atom', title: 'RELATIVISTIC ENERGY', formula: 'E = mc²' }
+  },
+  {
+    id: 'q_math',
+    question: 'Trigonometry me sin²θ + cos²θ ki value hamesha kitni hoti hai?',
+    options: ['A) Zero (0)', 'B) One (1)', 'C) Infinity (∞)'],
+    correctIndex: 1,
+    answerSummary: 'B) One (1)',
+    matchPattern: /\b(b|option b|one|1|ek|second|dusra)\b/i,
+    correctReply: 'Superb! sin²θ + cos²θ = 1 hota hai! Topper Mochi aapse impress ho gayi! Ye lo apna Gold Medal! 🏆💖',
+    wrongReply: 'Hahaha! Pakde gaye! sin²θ + cos²θ hamesha 1 (Option B) hota hai! Aur aapke Maths me marks 0 aane wale hain! Bolti band? 😎',
+    hologram: { type: 'neural_net', title: 'TRIGONOMETRIC IDENTITY', formula: 'sin²θ + cos²θ = 1' }
+  },
+  {
+    id: 'q_space',
+    question: 'Hamare Solar System ka sabse bada planet (grah) kaunsa hai?',
+    options: ['A) Mars (Mangal)', 'B) Saturn (Shani)', 'C) Jupiter (Brihaspati)'],
+    correctIndex: 2,
+    answerSummary: 'C) Jupiter',
+    matchPattern: /\b(c|option c|jupiter|brihaspati|third|teesra|जुपिटर|बृहस्पति)\b/i,
+    correctReply: 'Yay! Jupiter bilkul sahi jawab hai! Isme 1,300 Earths sama sakti hain — bilkul mere 200-IQ dimaag ki tarah! 🏆✨',
+    wrongReply: 'Oho! Galat! Sabse bada planet Option C: Jupiter hai! Lagta hai Geography ki class me aap kharate le rahe the! Hehehe! 😜',
+    hologram: { type: 'solar_system', title: 'SOLAR SYSTEM GIANT', formula: 'Jupiter · Mass = 318 M⊕' }
+  },
+  {
+    id: 'q_riddle',
+    question: 'Topper Paheli: Murgi pehle aayi ya Anda (Evolutionary Science ke hisaab se)?',
+    options: ['A) Anda (Amniotic Egg)', 'B) Murgi (Chicken)', 'C) Omelette'],
+    correctIndex: 0,
+    answerSummary: 'A) Anda (Egg)',
+    matchPattern: /\b(a|option a|anda|egg|first|pehla|अंडा)\b/i,
+    correctReply: 'Oye hoye! Genius जवाब! Amniotic Egg dinosaur ke zamane me 300 million saal pehle aaya tha, murgi baad me! Aap toh chhupe rustam nikle! 🏆💖',
+    wrongReply: 'Hahaha! Topper ki googly me out ho gaye! Science ke hisaab se Option A: Anda pehle aaya tha (300 million saal pehle)! Bolti band ho gayi na? 😎',
+    hologram: { type: 'dna_helix', title: 'EVOLUTIONARY GENETICS', formula: 'Amniotic Egg → Proto-Chicken' }
+  }
+];
+
+export function isVivaStartIntent(text) {
+  if (!text) return false;
+  return /\b(viva|quiz|test\s*lo|mera\s*test|exam\s*lo|sawal\s*pucho|question\s*pucho|challenge\s*me|mujhse\s*sawal|blackboard|वाइवा|क्विज|टेस्ट\s*लो|सवाल\s*पूछो)\b/i.test(String(text));
+}
+
+export function isVivaStopIntent(text) {
+  if (!text) return false;
+  return /\b(stop\s*quiz|stop\s*viva|viva\s*band|quiz\s*band|test\s*band|end\s*quiz|exit\s*viva)\b/i.test(String(text));
+}
+
+export function getNextVivaQuestion() {
+  const q = VIVA_QUIZ_BANK[vivaQuestionCursor % VIVA_QUIZ_BANK.length];
+  vivaQuestionCursor++;
+  return q;
+}
+
+export function evaluateVivaAnswer(questionObj, userText) {
+  if (!questionObj || !userText) return false;
+  const clean = String(userText).trim();
+  if (questionObj.matchPattern && questionObj.matchPattern.test(clean)) {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -351,23 +495,27 @@ export function isLiveSearchQuery(text) {
 export function generateSharartiTopperFallback(query) {
   const q = String(query || '').trim();
   const lower = q.toLowerCase();
+  const holo = detectHologramTopic(q);
 
   if (lower.includes('space') || lower.includes('universe') || lower.includes('galaxy') || lower.includes('solar') || lower.includes('mars') || lower.includes('moon') || lower.includes('brahmand')) {
     return {
-      reply: "Oho! Astrophysics puch rahe ho? Observable Universe 93 billion light-years phaila hua hai aur isme 2 trillion galaxies hain! Par sabse bada rahasya ye hai ki itne bade brahmand me aapka dhyan padhai me kyu nahi lagta! Bolti band? 😉",
-      action: 'topper_flex'
+      reply: "Oho! Astrophysics puch rahe ho? Observable Universe 93 billion light-years phaila hua hai aur isme 2 trillion galaxies hain! Dekho maine 3D Hologram bhi chala diya — par sabse bada rahasya ye hai ki aapka dhyan padhai me kyu nahi lagta! Bolti band? 😉",
+      action: 'topper_flex',
+      hologram: holo || { type: 'solar_system', title: 'OBSERVABLE UNIVERSE', formula: '93B Light-Years · 2T Galaxies' }
     };
   }
   if (lower.includes('history') || lower.includes('itihas') || lower.includes('mughal') || lower.includes('british') || lower.includes('independence') || lower.includes('war')) {
     return {
       reply: "History viva? Indus Valley Civilization se leke 1947 ki Independence tak mujhe har date yaad hai! Aapko toh apna kal ka homework tak yaad nahi rehta, chalo notes likho mere saath! Hehehe!",
-      action: 'topper_flex'
+      action: 'topper_flex',
+      hologram: holo
     };
   }
   if (lower.includes('chemistry') || lower.includes('periodic') || lower.includes('atom') || lower.includes('electron') || lower.includes('acid') || lower.includes('reaction')) {
     return {
       reply: "Chemistry puch rahe ho? Periodic table me 118 elements hain aur covalent bonding me electrons share hote hain — bilkul waise hi jaise aap exam me meri answer sheet jhaankne ki koshish karte ho! Hahaha! 😉",
-      action: 'topper_flex'
+      action: 'topper_flex',
+      hologram: holo || { type: 'quantum_atom', title: 'COVALENT ATOMIC ORBITS', formula: '118 Elements · e⁻ Sharing' }
     };
   }
 
@@ -380,7 +528,8 @@ export function generateSharartiTopperFallback(query) {
   topperFallbackCounter++;
   return {
     reply: chosen,
-    action: 'topper_flex'
+    action: 'topper_flex',
+    hologram: holo
   };
 }
 
@@ -389,6 +538,8 @@ export function findInstantQA(text) {
   const clean = String(text).trim();
   // Never intercept live news or real-time search queries with static QA!
   if (isLiveSearchQuery(clean)) return null;
+  // Never intercept explicit Viva/Quiz start requests with static QA!
+  if (isVivaStartIntent(clean)) return null;
 
   for (let i = 0; i < INSTANT_QA_DATABASE.length; i++) {
     const item = INSTANT_QA_DATABASE[i];
@@ -400,7 +551,8 @@ export function findInstantQA(text) {
         return {
           reply: list[idx],
           action: item.action,
-          emotion: item.emotion
+          emotion: item.emotion,
+          hologram: detectHologramTopic(clean) || detectHologramTopic(list[idx])
         };
       }
     }

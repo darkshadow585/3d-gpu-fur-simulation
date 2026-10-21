@@ -28,6 +28,10 @@ import {
   playCloneUniqueSound,
   playBallKickSound,
   playScoldShockSound,
+  playHologramProjectSound,
+  playChalkBoardWriteSound,
+  playVivaMedalSound,
+  playVivaRoastBuzzerSound,
   getActiveVocalEnvelope,
   setGlobalEmotionPitchMultiplier
 } from './soundEffects.js';
@@ -2039,6 +2043,401 @@ export function createBlobCreature(options = {}) {
     });
   }
 
+  // =========================================================================
+  // 22. 3D HOLOGRAM EXPLAINER PROJECTOR (Context-Triggered for Complex Topics)
+  // =========================================================================
+  const hologramContainer = new THREE.Group();
+  hologramContainer.name = 'MochiHologramProjector';
+  hologramContainer.visible = false;
+
+  // Sci-Fi Holographic Emitter Pad on floor/air beside Mochi
+  const holoPadGroup = new THREE.Group();
+  hologramContainer.add(holoPadGroup);
+
+  const holoBaseMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#0f172a'),
+    metalness: 0.85,
+    roughness: 0.2
+  });
+  const holoCyanGlowMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#06b6d4'),
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending
+  });
+  const holoVioletGlowMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#a855f7'),
+    transparent: true,
+    opacity: 0.78,
+    blending: THREE.AdditiveBlending
+  });
+  const holoAmberGlowMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#f59e0b'),
+    transparent: true,
+    opacity: 0.88,
+    blending: THREE.AdditiveBlending
+  });
+
+  const holoPadDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.06, 32), holoBaseMat);
+  holoPadDisc.position.y = -0.62;
+  holoPadGroup.add(holoPadDisc);
+
+  const holoEmitterRing = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.018, 12, 36), holoCyanGlowMat);
+  holoEmitterRing.rotation.x = Math.PI * 0.5;
+  holoEmitterRing.position.y = -0.58;
+  holoPadGroup.add(holoEmitterRing);
+
+  // Volumetric Hologram Beam Cone
+  const holoBeamMat = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#06b6d4'),
+    transparent: true,
+    opacity: 0.16,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const holoBeamCone = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.32, 1.25, 28, 1, true), holoBeamMat);
+  holoBeamCone.position.y = 0.04;
+  holoPadGroup.add(holoBeamCone);
+
+  // Floating Hologram Header Label (Dynamic CanvasTexture)
+  const holoLabelCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+  if (holoLabelCanvas) {
+    holoLabelCanvas.width = 512;
+    holoLabelCanvas.height = 160;
+  }
+  const holoLabelTex = holoLabelCanvas ? new THREE.CanvasTexture(holoLabelCanvas) : null;
+  const holoLabelMat = new THREE.MeshBasicMaterial({
+    map: holoLabelTex,
+    transparent: true,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  });
+  const holoLabelMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.28, 0.40), holoLabelMat);
+  holoLabelMesh.position.set(0, 0.86, 0);
+  hologramContainer.add(holoLabelMesh);
+
+  function renderHoloLabel(titleText, formulaText) {
+    if (!holoLabelCanvas || !holoLabelTex) return;
+    const ctx = holoLabelCanvas.getContext('2d');
+    ctx.clearRect(0, 0, 512, 160);
+    ctx.fillStyle = 'rgba(8, 22, 44, 0.82)';
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(10, 12, 492, 136, 22);
+    } else {
+      ctx.rect(10, 12, 492, 136);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 28px "Plus Jakarta Sans", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(titleText || 'TOPPER HOLOGRAM').toUpperCase(), 256, 62);
+
+    ctx.fillStyle = '#fde047';
+    ctx.font = 'bold 26px monospace';
+    ctx.fillText(String(formulaText || 'IQ 200 · EXPLAINER'), 256, 114);
+    holoLabelTex.needsUpdate = true;
+  }
+
+  // Sub-models for the 5 Hologram Scientific Domains
+  const holoModelsRoot = new THREE.Group();
+  holoModelsRoot.position.y = 0.14;
+  hologramContainer.add(holoModelsRoot);
+
+  // Model A: Black Hole & Relativistic Accretion Disk ('black_hole')
+  const blackHoleModel = new THREE.Group();
+  const bhCore = new THREE.Mesh(
+    new THREE.SphereGeometry(0.22, 28, 24),
+    new THREE.MeshBasicMaterial({ color: '#020617' })
+  );
+  blackHoleModel.add(bhCore);
+  const bhPhotonRing = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.018, 16, 48), holoCyanGlowMat);
+  blackHoleModel.add(bhPhotonRing);
+  const bhAccretionDisk = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.075, 14, 56), holoAmberGlowMat);
+  bhAccretionDisk.rotation.x = Math.PI * 0.38;
+  bhAccretionDisk.scale.z = 0.25;
+  blackHoleModel.add(bhAccretionDisk);
+  const bhOuterDisk = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.032, 12, 56), holoVioletGlowMat);
+  bhOuterDisk.rotation.x = Math.PI * 0.38;
+  blackHoleModel.add(bhOuterDisk);
+  holoModelsRoot.add(blackHoleModel);
+
+  // Model B: Quantum Atom & Electron Superposition Orbits ('quantum_atom')
+  const quantumAtomModel = new THREE.Group();
+  const atomNucleus = new THREE.Group();
+  for (let n = 0; n < 6; n++) {
+    const nucSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(0.068, 14, 12),
+      n % 2 === 0 ? holoAmberGlowMat : holoVioletGlowMat
+    );
+    nucSphere.position.set(
+      Math.cos(n * 1.1) * 0.045,
+      Math.sin(n * 1.7) * 0.045,
+      Math.cos(n * 2.3) * 0.045
+    );
+    atomNucleus.add(nucSphere);
+  }
+  quantumAtomModel.add(atomNucleus);
+  const atomElectrons = [];
+  for (let r = 0; r < 3; r++) {
+    const orbitPivot = new THREE.Group();
+    orbitPivot.rotation.z = (r * Math.PI) / 3;
+    orbitPivot.rotation.x = 0.45;
+    const orbitRing = new THREE.Mesh(new THREE.TorusGeometry(0.46, 0.01, 10, 48), holoCyanGlowMat);
+    orbitPivot.add(orbitRing);
+    const electronMesh = new THREE.Mesh(new THREE.SphereGeometry(0.042, 12, 10), holoAmberGlowMat);
+    orbitPivot.add(electronMesh);
+    quantumAtomModel.add(orbitPivot);
+    atomElectrons.push({ mesh: electronMesh, speed: 3.4 + r * 0.7, phase: r * 2.1 });
+  }
+  holoModelsRoot.add(quantumAtomModel);
+
+  // Model C: Rotating DNA Double Helix ('dna_helix')
+  const dnaHelixModel = new THREE.Group();
+  for (let k = 0; k < 10; k++) {
+    const y = (k - 4.5) * 0.095;
+    const angle = k * 0.62;
+    const r = 0.26;
+    const x1 = Math.cos(angle) * r;
+    const z1 = Math.sin(angle) * r;
+    const x2 = Math.cos(angle + Math.PI) * r;
+    const z2 = Math.sin(angle + Math.PI) * r;
+
+    const s1 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 10), holoCyanGlowMat);
+    s1.position.set(x1, y, z1);
+    dnaHelixModel.add(s1);
+
+    const s2 = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 10), holoVioletGlowMat);
+    s2.position.set(x2, y, z2);
+    dnaHelixModel.add(s2);
+
+    const rung = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, r * 2, 8),
+      k % 2 === 0 ? holoAmberGlowMat : holoCyanGlowMat
+    );
+    rung.position.set(0, y, 0);
+    rung.rotation.z = Math.PI * 0.5;
+    rung.rotation.y = -angle;
+    dnaHelixModel.add(rung);
+  }
+  holoModelsRoot.add(dnaHelixModel);
+
+  // Model D: Solar System & Planetary Orbits ('solar_system')
+  const solarSystemModel = new THREE.Group();
+  const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 18), holoAmberGlowMat);
+  solarSystemModel.add(sunMesh);
+  const solarPlanets = [];
+  const planetRadii = [0.26, 0.38, 0.52];
+  const planetSizes = [0.036, 0.052, 0.044];
+  for (let p = 0; p < 3; p++) {
+    const pRing = new THREE.Mesh(new THREE.TorusGeometry(planetRadii[p], 0.006, 8, 44), holoCyanGlowMat);
+    pRing.rotation.x = Math.PI * 0.5;
+    solarSystemModel.add(pRing);
+    const pPivot = new THREE.Group();
+    const pMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(planetSizes[p], 14, 12),
+      p === 1 ? holoCyanGlowMat : holoVioletGlowMat
+    );
+    pMesh.position.x = planetRadii[p];
+    if (p === 2) {
+      const saturnRing = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.01, 8, 24), holoAmberGlowMat);
+      saturnRing.rotation.x = 1.1;
+      pMesh.add(saturnRing);
+    }
+    pPivot.add(pMesh);
+    solarSystemModel.add(pPivot);
+    solarPlanets.push({ pivot: pPivot, speed: 2.4 - p * 0.55, phase: p * 1.8 });
+  }
+  holoModelsRoot.add(solarSystemModel);
+
+  // Model E: Neural Network & Polyhedron Math Matrix ('neural_net')
+  const neuralNetModel = new THREE.Group();
+  const wirePoly = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.36, 1),
+    new THREE.MeshBasicMaterial({
+      color: '#06b6d4',
+      wireframe: true,
+      transparent: true,
+      opacity: 0.72
+    })
+  );
+  neuralNetModel.add(wirePoly);
+  const innerCorePoly = new THREE.Mesh(new THREE.OctahedronGeometry(0.18, 0), holoVioletGlowMat);
+  neuralNetModel.add(innerCorePoly);
+  holoModelsRoot.add(neuralNetModel);
+
+  // =========================================================================
+  // 23. TOPPER VS. BACKBENCHER 3D CLASSROOM BLACKBOARD VIVA & GOLD MEDAL
+  // =========================================================================
+  const blackboardContainer = new THREE.Group();
+  blackboardContainer.name = 'TopperBlackboardViva';
+  blackboardContainer.visible = false;
+
+  const boardWoodMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#8b5a2b'),
+    roughness: 0.55,
+    metalness: 0.1
+  });
+  const boardFrameMesh = new THREE.Mesh(new THREE.BoxGeometry(1.96, 1.32, 0.08), boardWoodMat);
+  blackboardContainer.add(boardFrameMesh);
+
+  // Chalk Tray at bottom of 3D Blackboard
+  const chalkTrayMesh = new THREE.Mesh(new THREE.BoxGeometry(1.98, 0.06, 0.16), boardWoodMat);
+  chalkTrayMesh.position.set(0, -0.64, 0.05);
+  blackboardContainer.add(chalkTrayMesh);
+
+  // 3D Colored Chalk sticks resting on the tray
+  const chalkColors = ['#ffffff', '#fde047', '#f472b6'];
+  for (let c = 0; c < 3; c++) {
+    const chalkMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, 0.14, 10),
+      new THREE.MeshStandardMaterial({ color: chalkColors[c], roughness: 0.8 })
+    );
+    chalkMesh.rotation.z = Math.PI * 0.5 + (c - 1) * 0.08;
+    chalkMesh.position.set(-0.45 + c * 0.42, -0.595, 0.08);
+    blackboardContainer.add(chalkMesh);
+  }
+
+  // Dynamic CanvasTexture for the Green Chalkboard Surface
+  const boardCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+  if (boardCanvas) {
+    boardCanvas.width = 1024;
+    boardCanvas.height = 680;
+  }
+  const boardTex = boardCanvas ? new THREE.CanvasTexture(boardCanvas) : null;
+  const boardSurfaceMat = new THREE.MeshStandardMaterial({
+    map: boardTex,
+    roughness: 0.78,
+    metalness: 0.04
+  });
+  const boardSurfaceMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.82, 1.18), boardSurfaceMat);
+  boardSurfaceMesh.position.z = 0.045;
+  blackboardContainer.add(boardSurfaceMesh);
+
+  // Spinning 3D Gold Medal above the Blackboard when User answers right!
+  const vivaMedalGroup = new THREE.Group();
+  vivaMedalGroup.position.set(0, 0.86, 0.08);
+  vivaMedalGroup.visible = false;
+  const medalDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.03, 28), goldMat);
+  medalDisc.rotation.x = Math.PI * 0.5;
+  vivaMedalGroup.add(medalDisc);
+  const medalRibbon = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.18, 0.018), rubyMat);
+  medalRibbon.position.set(0, 0.16, -0.01);
+  vivaMedalGroup.add(medalRibbon);
+  blackboardContainer.add(vivaMedalGroup);
+
+  // 3D Teacher's Pointer Stick attached to Mochi's right side during Viva!
+  const pointerStickGroup = new THREE.Group();
+  pointerStickGroup.name = 'TopperPointerStick';
+  pointerStickGroup.position.set(0.95, 0.05, 0.52);
+  pointerStickGroup.visible = false;
+  const pointerShaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.024, 0.92, 12),
+    boardWoodMat
+  );
+  pointerShaft.position.y = 0.38;
+  pointerShaft.rotation.z = -0.55;
+  pointerStickGroup.add(pointerShaft);
+  const pointerTip = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 10), rubyMat);
+  pointerTip.position.set(0.44, 0.72, 0);
+  pointerStickGroup.add(pointerTip);
+  root.add(pointerStickGroup);
+
+  function wrapChalkText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = String(text || '').split(' ');
+    let line = '';
+    let curY = y;
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxWidth && n > 0) {
+        ctx.fillText(line.trim(), x, curY);
+        line = words[n] + ' ';
+        curY += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    if (line.trim()) {
+      ctx.fillText(line.trim(), x, curY);
+      curY += lineHeight;
+    }
+    return curY;
+  }
+
+  function renderBlackboardChalk(vivaData = {}) {
+    if (!boardCanvas || !boardTex) return;
+    const ctx = boardCanvas.getContext('2d');
+    // Deep classroom chalkboard slate green
+    ctx.fillStyle = '#143326';
+    ctx.fillRect(0, 0, 1024, 680);
+
+    // Subtle chalk dust border line
+    ctx.strokeStyle = 'rgba(248, 250, 252, 0.32)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(24, 24, 976, 632);
+
+    // Header Bar: Scoreboard
+    ctx.fillStyle = '#fde047';
+    ctx.font = 'bold 34px "Plus Jakarta Sans", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('🎓 SARARATI TOPPER VIVA', 48, 76);
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 30px monospace';
+    ctx.textAlign = 'right';
+    const mScore = vivaData.mochiScore ?? 1;
+    const uScore = vivaData.userScore ?? 0;
+    ctx.fillText(`Mochi: ${mScore}  |  You: ${uScore}`, 972, 76);
+
+    // Divider line
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(44, 100);
+    ctx.lineTo(980, 100);
+    ctx.stroke();
+
+    // Question text
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 34px "Plus Jakarta Sans", sans-serif';
+    ctx.textAlign = 'left';
+    const qText = vivaData.question || 'Ready for Topper Mochi Viva Challenge?';
+    let nextY = wrapChalkText(ctx, `Q: ${qText}`, 52, 162, 920, 46);
+
+    // Options A / B / C
+    const options = Array.isArray(vivaData.options) ? vivaData.options : [];
+    ctx.font = 'bold 30px "Plus Jakarta Sans", sans-serif';
+    nextY += 18;
+    for (let i = 0; i < options.length; i++) {
+      const optText = options[i];
+      const isCorrectOpt = vivaData.status && vivaData.status !== 'asking' && i === vivaData.correctIndex;
+      ctx.fillStyle = isCorrectOpt ? '#4ade80' : '#fef08a';
+      ctx.fillText(optText, 68, nextY + i * 54);
+    }
+
+    // Bottom status banner (Asking / Correct Medal / Savage Roast)
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 30px "Plus Jakarta Sans", sans-serif';
+    if (vivaData.status === 'correct') {
+      ctx.fillStyle = '#4ade80';
+      ctx.fillText('🏆 SHABASH! GOLD MEDAL POINT! (+1)', 512, 618);
+    } else if (vivaData.status === 'wrong') {
+      ctx.fillStyle = '#fb7185';
+      ctx.fillText(`😜 BACKBENCHER ROASTED! Ans: ${vivaData.answerSummary || ''}`, 512, 618);
+    } else {
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('🎙️ Speak your answer or click Option A / B / C below!', 512, 618);
+    }
+
+    boardTex.needsUpdate = true;
+  }
+
   // Animation & physics state for creature motion (coupled to GPGPU fur inertia)
   const animState = {
     time: 0,
@@ -2112,6 +2511,14 @@ export function createBlobCreature(options = {}) {
     magicActive: false,
     magicTimer: 0.0,
     selfieFlashTimer: 0.0,
+    hologramActive: false,
+    hologramType: 'black_hole',
+    hologramTimer: 0.0,
+    hologramScale: 0.0,
+    blackboardActive: false,
+    blackboardTimer: 0.0,
+    blackboardScale: 0.0,
+    vivaMedalVisible: false,
     prevPosition: new THREE.Vector3(),
     velocity: new THREE.Vector3(),
     angularVelocity: new THREE.Vector3(),
@@ -2536,6 +2943,76 @@ export function createBlobCreature(options = {}) {
       target = target.parent;
     }
     return false;
+  }
+
+  // =========================================================================
+  // CONTEXT-TRIGGERED 3D HOLOGRAM EXPLAINER & 3D BLACKBOARD VIVA API
+  // =========================================================================
+  function showHologram(topicType = 'black_hole', title = 'QUANTUM TOPPER', formula = 'E = mc²', duration = 14.0) {
+    const t = String(topicType || 'black_hole').toLowerCase().trim();
+    animState.hologramActive = true;
+    animState.hologramType = t;
+    animState.hologramTimer = duration;
+    hologramContainer.visible = true;
+
+    blackHoleModel.visible = (t === 'black_hole');
+    quantumAtomModel.visible = (t === 'quantum_atom');
+    dnaHelixModel.visible = (t === 'dna_helix');
+    solarSystemModel.visible = (t === 'solar_system');
+    neuralNetModel.visible = (t === 'neural_net' || (!blackHoleModel.visible && !quantumAtomModel.visible && !dnaHelixModel.visible && !solarSystemModel.visible));
+
+    renderHoloLabel(title, formula);
+
+    // Equip cool topper glasses when projecting a 3D hologram!
+    animState.accessories.sunglasses = true;
+    glassesGroup.visible = true;
+    animState.boopImpulse = 0.65;
+    emotionEngine.feedStimulus('topper_swag', 1.35);
+    if (canPlaySfx(80)) {
+      playHologramProjectSound();
+    }
+    return true;
+  }
+
+  function hideHologram() {
+    animState.hologramActive = false;
+    animState.hologramTimer = 0.0;
+  }
+
+  function updateBlackboardViva(vivaData = {}) {
+    animState.blackboardActive = true;
+    animState.blackboardTimer = vivaData.duration || 90.0;
+    animState.vivaMedalVisible = (vivaData.status === 'correct');
+    blackboardContainer.visible = true;
+    pointerStickGroup.visible = true;
+    vivaMedalGroup.visible = animState.vivaMedalVisible;
+
+    // Equip topper glasses while Mochi conducts the Viva!
+    animState.accessories.sunglasses = true;
+    glassesGroup.visible = true;
+    animState.boopImpulse = 0.65;
+    emotionEngine.feedStimulus('topper_swag', 1.4);
+
+    renderBlackboardChalk(vivaData);
+
+    if (canPlaySfx(60)) {
+      if (vivaData.status === 'correct') {
+        playVivaMedalSound();
+      } else if (vivaData.status === 'wrong') {
+        playVivaRoastBuzzerSound();
+      } else {
+        playChalkBoardWriteSound();
+      }
+    }
+    return true;
+  }
+
+  function hideBlackboardViva() {
+    animState.blackboardActive = false;
+    animState.blackboardTimer = 0.0;
+    animState.vivaMedalVisible = false;
+    pointerStickGroup.visible = false;
+    vivaMedalGroup.visible = false;
   }
 
   function setWeatherState(weatherMode) {
@@ -4021,6 +4498,117 @@ export function createBlobCreature(options = {}) {
       }
     }
     soldiersContainer.visible = anySoldierVisible;
+
+    // =========================================================================
+    // UPDATE 3D HOLOGRAM EXPLAINER PROJECTOR (Rotating 3D Scientific Models)
+    // =========================================================================
+    if (animState.hologramActive) {
+      if (animState.hologramTimer > 0) {
+        animState.hologramTimer -= safeDt;
+        if (animState.hologramTimer <= 0) {
+          animState.hologramTimer = 0.0;
+          animState.hologramActive = false;
+        }
+      }
+    }
+    const targetHoloScale = (animState.hologramActive && !animState.clonesOnlyMode) ? 1.0 : 0.0;
+    animState.hologramScale += (targetHoloScale - animState.hologramScale) * Math.min(1.0, safeDt * 7.5);
+
+    if (animState.hologramScale > 0.01) {
+      hologramContainer.visible = true;
+      const hs = animState.hologramScale * s;
+      const cosYaw = Math.cos(facingYaw);
+      const sinYaw = Math.sin(facingYaw);
+      const localHX = -1.78 * s;
+      const localHZ = 0.36 * s;
+      const worldHX = localHX * cosYaw + localHZ * sinYaw;
+      const worldHZ = -localHX * sinYaw + localHZ * cosYaw;
+
+      hologramContainer.position.set(
+        anchorPos.x + worldHX,
+        anchorPos.y - 0.12 * s + Math.sin(animState.time * 2.8) * 0.04 * s,
+        anchorPos.z + worldHZ
+      );
+      hologramContainer.scale.setScalar(hs);
+      hologramContainer.rotation.y = facingYaw + 0.24;
+
+      holoModelsRoot.rotation.y = animState.time * 1.15;
+      holoModelsRoot.position.y = 0.14 + Math.sin(animState.time * 3.4) * 0.035;
+      holoBeamMat.opacity = 0.13 + Math.sin(animState.time * 8.0) * 0.04;
+
+      if (blackHoleModel.visible) {
+        bhAccretionDisk.rotation.z = animState.time * 2.6;
+        bhOuterDisk.rotation.z = -animState.time * 1.8;
+      }
+      if (quantumAtomModel.visible) {
+        for (const el of atomElectrons) {
+          const ang = animState.time * el.speed + el.phase;
+          el.mesh.position.set(Math.cos(ang) * 0.46, Math.sin(ang) * 0.46, 0);
+        }
+      }
+      if (dnaHelixModel.visible) {
+        dnaHelixModel.rotation.y = animState.time * 1.6;
+      }
+      if (solarSystemModel.visible) {
+        for (const pl of solarPlanets) {
+          pl.pivot.rotation.y = animState.time * pl.speed + pl.phase;
+        }
+      }
+      if (neuralNetModel.visible) {
+        wirePoly.rotation.x = animState.time * 0.9;
+        wirePoly.rotation.y = animState.time * 1.3;
+        innerCorePoly.rotation.y = -animState.time * 2.1;
+      }
+    } else {
+      hologramContainer.visible = false;
+    }
+
+    // =========================================================================
+    // UPDATE 3D CLASSROOM BLACKBOARD VIVA & GOLD MEDAL
+    // =========================================================================
+    if (animState.blackboardActive) {
+      if (animState.blackboardTimer > 0) {
+        animState.blackboardTimer -= safeDt;
+        if (animState.blackboardTimer <= 0) {
+          animState.blackboardTimer = 0.0;
+          animState.blackboardActive = false;
+          pointerStickGroup.visible = false;
+        }
+      }
+    }
+    const targetBoardScale = (animState.blackboardActive && !animState.clonesOnlyMode) ? 1.0 : 0.0;
+    animState.blackboardScale += (targetBoardScale - animState.blackboardScale) * Math.min(1.0, safeDt * 7.0);
+
+    if (animState.blackboardScale > 0.01) {
+      blackboardContainer.visible = true;
+      const bs = animState.blackboardScale * s;
+      const cosYaw = Math.cos(facingYaw);
+      const sinYaw = Math.sin(facingYaw);
+      const localBX = 1.96 * s;
+      const localBZ = 0.25 * s;
+      const worldBX = localBX * cosYaw + localBZ * sinYaw;
+      const worldBZ = -localBX * sinYaw + localBZ * cosYaw;
+
+      blackboardContainer.position.set(
+        anchorPos.x + worldBX,
+        anchorPos.y + 0.16 * s + Math.sin(animState.time * 2.2) * 0.03 * s,
+        anchorPos.z + worldBZ
+      );
+      blackboardContainer.scale.setScalar(bs);
+      blackboardContainer.rotation.y = facingYaw - 0.26;
+
+      if (pointerStickGroup.visible) {
+        pointerStickGroup.rotation.z = Math.sin(animState.time * 5.5) * 0.18;
+        pointerStickGroup.rotation.x = Math.cos(animState.time * 4.0) * 0.12;
+      }
+      if (vivaMedalGroup.visible) {
+        vivaMedalGroup.rotation.y = animState.time * 3.2;
+        vivaMedalGroup.position.y = 0.86 + Math.abs(Math.sin(animState.time * 5.0)) * 0.08;
+      }
+    } else {
+      blackboardContainer.visible = false;
+      pointerStickGroup.visible = false;
+    }
   }
 
   return {
@@ -4031,6 +4619,8 @@ export function createBlobCreature(options = {}) {
     rainContainer,
     bubblesContainer,
     butterfliesContainer,
+    hologramContainer,
+    blackboardContainer,
     bodyMesh,
     bodyGeometry,
     skinMaterial,
@@ -4052,6 +4642,10 @@ export function createBlobCreature(options = {}) {
     clickCloneMesh,
     isClonesOnlyMode: () => animState.clonesOnlyMode,
     isClonesScolded: () => animState.clonesScolded,
+    showHologram,
+    hideHologram,
+    updateBlackboardViva,
+    hideBlackboardViva,
     summonSoldiers,
     triggerSoldiersFight,
     dismissSoldiers,

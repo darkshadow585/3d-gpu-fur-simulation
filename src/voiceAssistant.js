@@ -37,7 +37,18 @@ import {
   playBallKickSound,
   playScoldShockSound
 } from './soundEffects.js';
-import { findInstantQA, isLiveSearchQuery, searchLiveWebAPI, askGeminiAPI, askGeminiAudioAPI } from './knowledgeEngine.js';
+import {
+  findInstantQA,
+  isLiveSearchQuery,
+  searchLiveWebAPI,
+  askGeminiAPI,
+  askGeminiAudioAPI,
+  detectHologramTopic,
+  isVivaStartIntent,
+  isVivaStopIntent,
+  getNextVivaQuestion,
+  evaluateVivaAnswer
+} from './knowledgeEngine.js';
 
 export function createVoiceAssistant(options = {}) {
   const {
@@ -597,11 +608,12 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 9. 3D MAGIC WAND, LEVITATION & BUTTERFLIES ('magic').
 10. 3D SELFIE CAMERA POSE & FUNNY PROPS ('selfie').
 11. 3D MUSICAL CONCERT WITH GUITAR & DHOL ('guitar', 'dhol').
-12. SARARATI TOPPER COMPLEX Q&A, WITTY ROASTING & FLIRTING ('topper_flex'):
-   * When the user asks complex questions (Quantum Physics, Black Holes, Relativity, AI/Coding, Calculus, Biology/DNA, Economics, Space, Philosophy, or Riddles) or asks you to roast them, ALWAYS use the 3-Step Sararati Topper Formula:
-     1) Witty Roast Hook: Tease their "backbencher brain" or playful challenge ("Oho! Backbencher hoke Quantum Physics puch rahe ho?"),
-     2) High-Level Genius Explanation: Give a genuinely smart, accurate, high-IQ explanation that proves you're the #1 Gold Medalist Topper,
-     3) Sassy "Bolti Band" Comeback / Cute Flirt: End with a mic-drop comeback ("Bolti band ho gayi na? Ab bolo, kab se lagau aapki tuition? 😉💖") and optionally call play_creature_action(action="topper_flex")!`;
+12. SARARATI TOPPER COMPLEX Q&A, 3D HOLOGRAM PROJECTOR & 3D BLACKBOARD VIVA ('topper_flex', 'show_3d_hologram', 'start_blackboard_viva'):
+   * When the user asks complex questions (Quantum Physics, Black Holes, Relativity, AI/Coding, Calculus, Biology/DNA, Economics, Space, Philosophy, or Riddles), ALWAYS call show_3d_hologram(topicType=...) to materialize a glowing 3D Hologram model beside you AND use the 3-Step Sararati Topper Formula:
+     1) Witty Roast Hook: Tease their "backbencher brain" ("Oho! Backbencher hoke Quantum Physics puch rahe ho?"),
+     2) High-Level Genius Explanation: Give a genuinely smart, accurate, high-IQ explanation while pointing to your 3D Hologram,
+     3) Sassy "Bolti Band" Comeback / Cute Flirt: End with a mic-drop comeback ("Bolti band ho gayi na? Ab bolo, kab se lagau aapki tuition? 😉💖")!
+   * When the user asks for a quiz, test, viva, riddle, or challenge ("viva lo", "quiz khelo", "mera test lo", "sawal pucho"), call start_blackboard_viva(action="start") to deploy the 3D Classroom Blackboard Viva!`;
 
     const tools = [
       {
@@ -727,6 +739,44 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
             }
           },
           {
+            name: 'show_3d_hologram',
+            description: "Automatically project a rotating 3D scientific hologram model beside Mochi when explaining complex topics: 'black_hole' (Black Holes, Relativity, Gravity), 'quantum_atom' (Quantum Physics, Atoms, Chemistry), 'dna_helix' (DNA, Biology, Brain, Evolution), 'solar_system' (Space, Planets, Astrophysics), or 'neural_net' (AI, Coding, Calculus, Math, Economics).",
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                topicType: {
+                  type: 'STRING',
+                  enum: ['black_hole', 'quantum_atom', 'dna_helix', 'solar_system', 'neural_net'],
+                  description: '3D Hologram model type'
+                },
+                title: {
+                  type: 'STRING',
+                  description: 'Short topic heading for the hologram banner'
+                },
+                formula: {
+                  type: 'STRING',
+                  description: 'Key equation or scientific formula to display on the hologram'
+                }
+              },
+              required: ['topicType']
+            }
+          },
+          {
+            name: 'start_blackboard_viva',
+            description: "Start, advance, or stop the Topper vs. Backbencher 3D Classroom Blackboard Viva Quiz when the user asks for a quiz, test, viva, challenge, or brain teaser ('viva lo', 'quiz khelo', 'mera test lo', 'sawal pucho').",
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                action: {
+                  type: 'STRING',
+                  enum: ['start', 'next', 'stop'],
+                  description: "'start' or 'next' to ask a new 3D Blackboard Viva question, 'stop' to close the blackboard"
+                }
+              },
+              required: ['action']
+            }
+          },
+          {
             name: 'adjust_lighting_and_wind',
             description: 'Adjust lighting brightness, key color, or wind breeze strength on the fur.',
             parameters: {
@@ -803,6 +853,23 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
           const searchData = await searchLiveWebAPI(args?.query || 'latest news India today', getApiKey());
           resultMsg = searchData?.result || 'Live search completed: Tell the user the latest news in your witty Class Topper voice!';
           updateHud('🎙️ Mochi-Puff Live ON · Speak in Hindi or English! Click Mochi to stop.');
+        } else if (name === 'show_3d_hologram') {
+          const tType = args?.topicType || 'black_hole';
+          const title = args?.title || 'TOPPER 3D HOLOGRAM';
+          const formula = args?.formula || 'E = mc²';
+          if (creature && creature.showHologram) {
+            creature.showHologram(tType, title, formula, 15.0);
+          }
+          showToolBadge('🔬 3D Hologram: ' + title);
+          resultMsg = `Projected 3D hologram for ${title} (${tType})`;
+        } else if (name === 'start_blackboard_viva') {
+          if (args?.action === 'stop') {
+            stopBlackboardViva();
+            resultMsg = 'Closed 3D Blackboard Viva.';
+          } else {
+            const q = startBlackboardVivaRound(false);
+            resultMsg = `3D Blackboard Viva started! Ask the user this exact question in your witty Topper voice: "${q.question}" Options: ${q.options.join(', ')}`;
+          }
         } else if (name === 'adjust_lighting_and_wind') {
           if (args.windStrength !== undefined && furSystem) {
             furSystem.sharedUniforms.uWindStrength.value = args.windStrength;
@@ -1053,6 +1120,237 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     creature.setOnCloneClick((cloneInfo) => {
       speakCloneReply(cloneInfo);
     });
+  }
+
+  // =========================================================================
+  // CONTEXT-TRIGGERED 3D HOLOGRAM PROJECTOR & 3D BLACKBOARD VIVA ENGINE
+  // =========================================================================
+  const vivaState = {
+    active: false,
+    currentQuestion: null,
+    mochiScore: 1,
+    userScore: 0,
+    status: 'idle' // 'asking' | 'correct' | 'wrong'
+  };
+
+  function maybeTriggerContextHologram(text, explicitHolo = null) {
+    const holo = explicitHolo || detectHologramTopic(text);
+    if (!holo || !creature || !creature.showHologram) return false;
+    creature.showHologram(holo.type, holo.title, holo.formula, 15.0);
+    showToolBadge(`🔬 3D Hologram: ${holo.title}`);
+    return true;
+  }
+
+  function syncVivaQuizBar() {
+    if (typeof document === 'undefined') return;
+    let bar = document.getElementById('viva-quiz-bar');
+    if (!vivaState.active || !vivaState.currentQuestion) {
+      if (bar) bar.style.display = 'none';
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'viva-quiz-bar';
+      Object.assign(bar.style, {
+        position: 'fixed',
+        bottom: '56px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        padding: '8px 12px',
+        borderRadius: '14px',
+        background: 'rgba(15, 23, 42, 0.86)',
+        backdropFilter: 'blur(12px)',
+        border: '1px solid rgba(255, 255, 255, 0.14)',
+        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
+        zIndex: '48',
+        maxWidth: '94vw'
+      });
+      document.body.appendChild(bar);
+    }
+
+    bar.style.display = 'flex';
+    bar.innerHTML = '';
+
+    const q = vivaState.currentQuestion;
+    const scoreLabel = document.createElement('span');
+    scoreLabel.textContent = `🎓 Topper Mochi: ${vivaState.mochiScore} · You: ${vivaState.userScore}`;
+    Object.assign(scoreLabel.style, {
+      color: '#fde047',
+      fontSize: '12px',
+      fontWeight: '700',
+      marginRight: '4px',
+      fontVariantNumeric: 'tabular-nums',
+      whiteSpace: 'nowrap'
+    });
+    bar.appendChild(scoreLabel);
+
+    if (vivaState.status === 'asking') {
+      q.options.forEach((optText) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = optText;
+        Object.assign(btn.style, {
+          padding: '6px 12px',
+          borderRadius: '8px',
+          border: '1px solid rgba(56, 189, 248, 0.35)',
+          background: 'rgba(30, 41, 59, 0.92)',
+          color: '#f8fafc',
+          fontSize: '12px',
+          fontWeight: '600',
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
+        });
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          submitVivaAnswer(optText, true);
+        });
+        bar.appendChild(btn);
+      });
+    } else {
+      const nextBtn = document.createElement('button');
+      nextBtn.type = 'button';
+      nextBtn.textContent = 'Agla Sawal (Next)';
+      Object.assign(nextBtn.style, {
+        padding: '6px 12px',
+        borderRadius: '8px',
+        border: '1px solid rgba(74, 222, 128, 0.45)',
+        background: 'rgba(20, 83, 45, 0.9)',
+        color: '#f8fafc',
+        fontSize: '12px',
+        fontWeight: '600',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap'
+      });
+      nextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        startBlackboardVivaRound(true, true);
+      });
+      bar.appendChild(nextBtn);
+    }
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = 'End Viva';
+    Object.assign(closeBtn.style, {
+      padding: '6px 10px',
+      borderRadius: '8px',
+      border: '1px solid rgba(255, 255, 255, 0.16)',
+      background: 'rgba(51, 65, 85, 0.7)',
+      color: '#cbd5e1',
+      fontSize: '12px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      whiteSpace: 'nowrap'
+    });
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      stopBlackboardViva();
+    });
+    bar.appendChild(closeBtn);
+  }
+
+  function startBlackboardVivaRound(shouldSpeak = true, forceDirectClickSpeech = false) {
+    const q = getNextVivaQuestion();
+    vivaState.active = true;
+    vivaState.currentQuestion = q;
+    vivaState.status = 'asking';
+
+    if (creature && creature.updateBlackboardViva) {
+      creature.updateBlackboardViva({
+        question: q.question,
+        options: q.options,
+        correctIndex: q.correctIndex,
+        mochiScore: vivaState.mochiScore,
+        userScore: vivaState.userScore,
+        status: 'asking',
+        duration: 95.0
+      });
+    }
+    if (q.hologram && creature && creature.showHologram) {
+      creature.showHologram(q.hologram.type, q.hologram.title, q.hologram.formula, 20.0);
+    }
+
+    syncVivaQuizBar();
+    showToolBadge('🎓 3D Blackboard Viva Started!');
+    updateHud(`🎓 Viva Q: "${q.question}" — Speak A, B, or C or click below!`);
+
+    if (shouldSpeak) {
+      const askSpeech = `Chalo Topper Mochi ka 3D Blackboard Viva shuru! Sawal dhyan se suno: ${q.question} Option ${q.options.join(', ')}! Batao sahi jawab kya hai?`;
+      speakCuteCartoonVoice(askSpeech, null, { forceDirectClickSpeech });
+    }
+    return q;
+  }
+
+  function submitVivaAnswer(userText, forceDirectClickSpeech = false) {
+    if (!vivaState.active || !vivaState.currentQuestion) return false;
+    const q = vivaState.currentQuestion;
+    const isCorrect = evaluateVivaAnswer(q, userText);
+
+    if (isCorrect) {
+      vivaState.userScore += 1;
+      vivaState.status = 'correct';
+    } else {
+      vivaState.mochiScore += 1;
+      vivaState.status = 'wrong';
+      executeCreatureAction('topper_flex');
+    }
+
+    if (creature && creature.updateBlackboardViva) {
+      creature.updateBlackboardViva({
+        question: q.question,
+        options: q.options,
+        correctIndex: q.correctIndex,
+        answerSummary: q.answerSummary,
+        mochiScore: vivaState.mochiScore,
+        userScore: vivaState.userScore,
+        status: vivaState.status,
+        duration: 60.0
+      });
+    }
+    if (q.hologram && creature && creature.showHologram) {
+      creature.showHologram(q.hologram.type, q.hologram.title, q.hologram.formula, 15.0);
+    }
+
+    syncVivaQuizBar();
+    const feedbackSpeech = isCorrect ? q.correctReply : q.wrongReply;
+    updateHud(isCorrect ? `🏆 Correct! ${q.answerSummary}` : `😜 Roasted! Ans: ${q.answerSummary}`);
+
+    if (isConnected && socket && socket.readyState === WebSocket.OPEN && forceDirectClickSpeech) {
+      socket.send(JSON.stringify({
+        clientContent: {
+          turns: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `[In the 3D Blackboard Viva, the user answered "${userText}" to "${q.question}". That is ${isCorrect ? 'CORRECT' : 'WRONG'}! Speak in your Sararati Class Topper voice: "${feedbackSpeech}"]`
+                }
+              ]
+            }
+          ],
+          turnComplete: true
+        }
+      }));
+    } else {
+      speakCuteCartoonVoice(feedbackSpeech, null, { forceDirectClickSpeech });
+    }
+    return true;
+  }
+
+  function stopBlackboardViva() {
+    vivaState.active = false;
+    vivaState.currentQuestion = null;
+    vivaState.status = 'idle';
+    if (creature && creature.hideBlackboardViva) {
+      creature.hideBlackboardViva();
+    }
+    syncVivaQuizBar();
+    updateHud('🎓 3D Blackboard Viva closed · Click Mochi to talk!');
   }
 
   function executeCreatureAction(action) {
@@ -1844,12 +2142,43 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     const reqSessionId = sessionGenerationId;
     showTranscript('user', text);
 
+    // 0a. Check if user wants to stop an active 3D Blackboard Viva
+    if (isVivaStopIntent(text)) {
+      stopBlackboardViva();
+      speakCuteCartoonVoice('Oho! Viva se dar lag gaya kya backbencher? Chalo 3D Blackboard band kar diya! Hehehe!');
+      return;
+    }
+
+    // 0b. Check if user is asking to start a 3D Blackboard Viva / Quiz / Test
+    if (isVivaStartIntent(text)) {
+      startBlackboardVivaRound(true, false);
+      return;
+    }
+
+    // 0c. If a 3D Blackboard Viva question is currently waiting for an answer, evaluate it!
+    if (vivaState.active && vivaState.status === 'asking' && vivaState.currentQuestion) {
+      submitVivaAnswer(text, false);
+      return;
+    }
+    if (vivaState.active && vivaState.status !== 'asking' && /\b(next|agla|aur\s*ek|another|continue|haan)\b/i.test(text)) {
+      startBlackboardVivaRound(true, false);
+      return;
+    }
+
+    // Automatically project 3D Hologram if user's question is about a complex topic
+    maybeTriggerContextHologram(text);
+
     // 1. Instant encyclopedic & Sararati Topper QA (Quantum Physics, Black Holes, AI, Maths, Roasts, GK)
     const instant = findInstantQA(text);
     if (instant) {
       if (creature && creature.emotionEngine) {
         const stim = instant.emotion === 'topper_swag' ? 'topper_swag' : 'praise';
         creature.emotionEngine.feedStimulus(stim, 1.35);
+      }
+      if (instant.hologram) {
+        maybeTriggerContextHologram(text, instant.hologram);
+      } else {
+        maybeTriggerContextHologram(instant.reply);
       }
       if (instant.action && executeCreatureAction) {
         executeCreatureAction(instant.action);
@@ -1881,6 +2210,11 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     }
 
     if (geminiData && geminiData.reply) {
+      if (geminiData.hologram) {
+        maybeTriggerContextHologram(text, geminiData.hologram);
+      } else {
+        maybeTriggerContextHologram(text + ' ' + geminiData.reply);
+      }
       if (geminiData.action) {
         executeCreatureAction(geminiData.action);
       }
@@ -1919,10 +2253,29 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
 
     const spokenTranscript = String(geminiData.transcript || '').trim();
     if (spokenTranscript) {
+      if (isVivaStopIntent(spokenTranscript)) {
+        stopBlackboardViva();
+        speakCuteCartoonVoice('Oho! Viva se dar lag gaya kya? Chalo 3D Blackboard band kar diya!');
+        return;
+      }
+      if (isVivaStartIntent(spokenTranscript)) {
+        startBlackboardVivaRound(true, false);
+        return;
+      }
+      if (vivaState.active && vivaState.status === 'asking' && vivaState.currentQuestion) {
+        submitVivaAnswer(spokenTranscript, false);
+        return;
+      }
+
+      maybeTriggerContextHologram(spokenTranscript);
+
       const instant = findInstantQA(spokenTranscript);
       if (instant) {
         if (creature && creature.emotionEngine) {
           creature.emotionEngine.feedStimulus('praise', 1.25);
+        }
+        if (instant.hologram) {
+          maybeTriggerContextHologram(spokenTranscript, instant.hologram);
         }
         if (instant.action && executeCreatureAction) {
           executeCreatureAction(instant.action);
@@ -1938,6 +2291,7 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
     }
 
     if (geminiData.reply) {
+      maybeTriggerContextHologram((spokenTranscript || '') + ' ' + geminiData.reply);
       if (geminiData.action) {
         executeCreatureAction(geminiData.action);
       }
@@ -2083,11 +2437,23 @@ Always harmonize your spoken words, tone, and tool calls with your current Emoti
             }
 
             if (sc.inputTranscription?.text) {
-              showTranscript('user', sc.inputTranscription.text);
-              handleInstantVoiceTranscript(sc.inputTranscription.text);
+              const inTxt = sc.inputTranscription.text;
+              showTranscript('user', inTxt);
+              if (isVivaStopIntent(inTxt)) {
+                stopBlackboardViva();
+              } else if (isVivaStartIntent(inTxt)) {
+                startBlackboardVivaRound(false, false);
+              } else if (vivaState.active && vivaState.status === 'asking' && vivaState.currentQuestion) {
+                submitVivaAnswer(inTxt, false);
+              } else {
+                maybeTriggerContextHologram(inTxt);
+                handleInstantVoiceTranscript(inTxt);
+              }
             }
             if (sc.outputTranscription?.text) {
-              showTranscript('mochi', sc.outputTranscription.text);
+              const outTxt = sc.outputTranscription.text;
+              showTranscript('mochi', outTxt);
+              maybeTriggerContextHologram(outTxt);
             }
           }
 

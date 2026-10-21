@@ -110,6 +110,12 @@ if (creature.bubblesContainer) {
 if (creature.butterfliesContainer) {
   scene.add(creature.butterfliesContainer);
 }
+if (creature.hologramContainer) {
+  scene.add(creature.hologramContainer);
+}
+if (creature.blackboardContainer) {
+  scene.add(creature.blackboardContainer);
+}
 
 const gpuPhysics = createGPUFurPhysics(renderer);
 // Automatic WebGL fallback if GPGPU ping-pong physics is unsupported by the device/browser

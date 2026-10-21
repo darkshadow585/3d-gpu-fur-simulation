@@ -1,65 +1,67 @@
-# Mochi-Puff 3D Interactive Showcases & Clean Live Audio Control
+# Mochi-Puff: 3D Hologram Explainer & Topper Blackboard Viva Plan
 
-This plan resolves the unintended offline browser TTS voice firing when turning off the microphone or using Gemini 3.8 Live, and expands Mochi-Puff's 3D world with three new multi-part interactive experiences: **Magic Wand, Levitation & Butterflies**, **3D Selfie Camera Pose & Funny Props**, and **3D Musical Concert with Guitar & Dhol**.
+This update elevates Mochi-Puff's **"Sararati Class Topper"** experience by adding two context-aware 3D interactive features: an automatic **3D Hologram Explainer Projector** that materializes rotating 3D models beside Mochi when she explains complex topics, and a **Topper vs. Backbencher 3D Blackboard Viva Quiz** where Mochi challenges the user to rapid-fire questions, roasts wrong answers, and awards 3D Gold Medals.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Below is a summary of your confirmed choices from our questions, along with the root-cause explanation of why offline TTS played when turning off the microphone.
+> Both features are designed to trigger **automatically based on conversation context** (voice or text) without cluttering the viewport with permanent menus, while also supporting natural voice commands like *"Viva lo"*, *"Quiz khelo"*, or asking about complex topics (*Black Holes, Quantum Physics, DNA, AI, Solar System, Calculus*).
 
-- **Confirmed Decision 1 — 3 New Interactive 3D Experiences**:
-  1. **3D Magic Wand, Levitation & Butterflies**: Mochi-Puff holds a glowing star-tipped 3D magic wand, levitates gently above the ground with a sparkle ring, and summons fluttering 3D colorful butterflies that orbit around the scene.
-  2. **3D Selfie Camera Pose & Funny Props**: Mochi-Puff strikes playful peace-sign / wink poses with a 3D vintage camera prop, triggering a crisp studio camera flash effect, Polaroid-style frame animation, and quick-swap funny 3D props (starry party glasses, bow-tie, and comedy mustache).
-  3. **3D Musical Concert with Guitar & Dhol**: Mochi-Puff rocks out with a procedural 3D acoustic/electric guitar or traditional festive Dhol drum, accompanied by floating 3D musical notes, rhythmic body bounce, and synthesized Web Audio beats.
-- **Confirmed Decision 2 — Strict Silence of Offline Browser TTS (`speechSynthesis`)**:
-  - **Why Offline TTS Played When Stopping the Mic**: When you clicked Mochi-Puff to turn off the microphone, `disconnectLiveAPI()` set `isConnected = false` and called `recognition.stop()`. In browsers, calling `recognition.stop()` immediately flushes buffered speech and fires one final `onresult` event. Because `isConnected` had just been set to `false`, the fallback handler assumed Gemini Live was offline and triggered `window.speechSynthesis` (offline browser TTS) right after you turned the mic off. Additionally, instant keyword matches were calling `speakCuteCartoonVoice` even while Gemini Live was active.
-  - **Chosen Fix**: Immediately abort and ignore any `SpeechRecognition` results, in-flight audio requests, or `speechSynthesis` utterances whenever `userWantsListening` is `false` or when Gemini 3.8 Live is actively connected, ensuring 100% silence on mic stop and pure Gemini 3.8 Live voice during sessions.
+- **Confirmed Feature 1 — 3D Hologram Projector for Complex Topics**: Automatically spawns a glowing sci-fi holographic projector pad and an animated 3D topic model (*Black Hole & Accretion Disk, Quantum Atom Orbits, DNA Double Helix, Solar System Orbits, or Neural Network Nodes*) whenever a complex science, tech, space, or math topic is discussed.
+- **Confirmed Feature 2 — Topper vs. Backbencher 3D Blackboard Quiz**: Automatically deploys a floating 3D classroom blackboard with dynamic canvas-textured chalk text, live score tracking, and 3D Gold Medal / Dunce Hat props when the user asks for a quiz, test, viva, riddle, or challenge.
+- **Confirmed Trigger Mode — Context-Driven Automatic Activation**: Triggered seamlessly from spoken/typed conversation context, Gemini Live tool calls, and instant keyword detection.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Enhances Mochi-Puff as an expressive, touch-and-voice interactive 3D companion. Clicking Mochi-Puff cleanly toggles the microphone ON and OFF without any stray offline TTS voice speaking after stopping. While talking or using the scene dock, users can trigger magical spells, selfie photo shoots, and musical concerts via voice commands (in Hindi, Hinglish, or English) or direct UI controls.
-- **Target Audience / Persona**: Users who want a lifelike, responsive 3D virtual pet and companion that reacts instantaneously to voice commands and touch with Pixar-inspired procedural 3D props and zero audio overlap.
-- **Key Value**: Eliminates jarring robotic browser TTS interruptions when disconnecting the mic and brings rich 3D visual variety to play sessions.
+- **What It Does**:
+  1. **3D Hologram Explainer Projector**: When Mochi answers a complex question (e.g., Quantum Mechanics, Black Holes, DNA, Neural Networks, Space, or Math), she puts on her topper glasses, activates a glowing cyan/magenta holographic emitter beside her, and projects a rotating 3D scientific model while delivering her signature *Roast + High-IQ Explanation + Bolti-Band Comeback*.
+  2. **Topper vs. Backbencher 3D Blackboard Viva**: When the user challenges Mochi or asks for a test/quiz/paheli (*"Mera viva lo"*, *"Quiz khelo"*, *"Challenge"*), a 3D wooden-framed green classroom blackboard floats down beside Mochi with a 3D wooden pointer stick in her paw. She asks a tricky question written in chalk on the 3D board, listens to the user's spoken answer, roasts them hilariously if they miss or awards a spinning 3D Gold Medal if they pass!
+- **Target Audience / Persona**: Users interacting with Mochi-Puff in Hindi/Hinglish or English who want a deeply entertaining, visually magical 3D companion that feels like a mischievous genius classmate.
+- **Key Value**: Transforms verbal explanations and witty banter into tangible, spatial 3D visual spectacles synchronized with Mochi's voice and emotions.
 
 ---
 
 ## 2. User Experience & Visual Design
 
 - **Key User Flows**:
-  1. **Click-to-Talk & Instant Silence on Stop**:
-     - Click Mochi-Puff once → Mochi boops happily, opens the microphone, and connects to Gemini 3.8 Live.
-     - Speak naturally in Hindi or English (e.g., *"Mochi jadoo dikhao"*, *"Selfie lete hain"*, *"Dhol bajao"*).
-     - Click Mochi-Puff again → All audio streams, WebSockets, SpeechRecognition callbacks, and browser TTS queues are immediately cancelled and gated so no delayed voice ever plays after stopping.
-  2. **Magic Wand, Levitation & Butterflies Flow**:
-     - Triggered by voice (*"magic"*, *"jadoo"*, *"wand"*, *"butterfly"*, *"titli"*, *"fly"*) or the bottom scene dock.
-     - Mochi-Puff equips a golden star-tipped wand in its right hand, floats upward in a smooth anti-gravity hover, and spawns 6–8 multi-wing 3D butterflies with animated flapping wings and glowing fairy dust trails.
-  3. **3D Selfie Camera Pose & Funny Props Flow**:
-     - Triggered by voice (*"selfie"*, *"photo"*, *"camera"*, *"pose"*, *"chashma"*, *"mustache"*) or the bottom scene dock.
-     - Mochi-Puff tilts its head into a cute model pose, equips funny 3D props (oversized star glasses, dapper bow-tie, or curly mustache), raises a 3D toy camera, and triggers a soft studio flash with a shutter sound effect.
-  4. **3D Musical Concert (Guitar & Dhol) Flow**:
-     - Triggered by voice (*"music"*, *"concert"*, *"guitar"*, *"dhol"*, *"bhangra"*, *"song"*) or the bottom scene dock.
-     - Mochi-Puff holds a composite 3D guitar or festive Indian Dhol slung across its body, strumming/drumming in sync with procedural Web Audio melodies and rising 3D musical note geometries.
+  1. **Context-Triggered 3D Hologram Flow**:
+     - The user asks a complex question (e.g., *"Black hole kya hota hai?"*, *"Explain DNA"*, *"Quantum physics batao"*).
+     - Mochi's context detector classifies the topic domain (`black_hole`, `quantum_atom`, `dna_helix`, `solar_system`, `neural_net`, `math_geometry`).
+     - A sleek 3D holographic base disc rises beside Mochi with a volumetric light beam and floating rotating 3D geometry (e.g., a dark singularity sphere with a glowing orange/cyan particle accretion ring for Black Holes, or a twisting double-helix ladder for DNA).
+     - Mochi points toward the hologram while speaking her witty topper explanation and roast; the hologram smoothly dissolves 12 seconds after she finishes speaking.
+  2. **Context-Triggered 3D Blackboard Viva Flow**:
+     - The user says *"Mera test lo"*, *"Quiz pucho"*, *"Viva start karo"*, or *"Paheli pucho"*.
+     - A 3D classroom blackboard with a chalk tray and scoreboard (`Topper Mochi vs. Backbencher You`) glides into the 3D scene; Mochi equips her topper spectacles and holds a 3D teacher's pointer stick.
+     - The current question and hints render crisp chalk typography onto the 3D blackboard surface, accompanied by a lightweight, non-obtrusive DOM answer bar at the bottom for one-tap or voice answering.
+     - **Correct Answer**: Mochi acts shocked (*"Oho! Tukka lag gaya!"*), increments the user's score on the 3D board, and spawns a spinning 3D Gold Medal above the user's score.
+     - **Wrong Answer**: Mochi laughs mischievously, roasts the user's backbencher brain, writes the correct formula/fact on the 3D blackboard, and does her `topper_flex` animation.
+
 - **Visual Identity & Theme**:
-  - *Aesthetic Direction*: Tactile, studio-lit 3D toy showcase with a clean, unobstructed central viewport and a compact bottom control dock.
-  - *Color Palette & Mood*: Warm pastel studio environment (`--background` soft cream/sky gradients), iridescent gold and magenta accents for magic spells, warm wood and brass PBR finishes for the guitar and Dhol, and glossy polycarbonate/metal materials for the camera and props.
-  - *Typography & Hierarchy*: Clean geometric UI labels (`Plus Jakarta Sans` / `DM Sans`) in the collapsible bottom dock with single-line button affordances (`whitespace-nowrap`).
-- **Interactive Feedback & Motion**:
-  - Frame-rate independent spring physics and exponential damping (`THREE.MathUtils.damp`) for levitation height, butterfly wing flapping (`Math.sin(t * 14)`), and rhythmic concert head-bopping.
+  - **Aesthetic Direction**: Tactile 3D toy-studio realism blended with luminous holographic sci-fi projections and nostalgic classroom chalk textures.
+  - **Color Palette & Mood**:
+    - *Hologram Palette*: Electric Cyan (`#06B6D4`), Bioluminescent Violet (`#A855F7`), Accretion Amber (`#F59E0B`) with additive blending (`THREE.AdditiveBlending`) and scanline shimmer.
+    - *Blackboard Palette*: Deep Slate Chalkboard Green (`#143326`), Warm Oak Wood Frame (`#8B5A2B`), Crisp Chalk White (`#F8FAFC`), and Gold Medal Metallic (`#FACC15`).
+  - **Typography & Hierarchy**:
+    - 3D Blackboard dynamic canvas texture uses clean chalk-style display lettering with tabular numerals (`tabular-nums`) for the live score counter.
+    - Floating HUD notifications use a translucent dark frosted surface (`bg-black/45 backdrop-blur-md border border-white/10`) that never blocks Mochi-Puff at the center of the viewport.
+  - **Interactive Feedback & Motion**:
+    - Spring-damped scale-in and hover bobbing on both the 3D Hologram and 3D Blackboard.
+    - WebAudio procedural sound effects: sci-fi hologram hum & chime on projection spawn, chalk-writing scratch sound when a new viva question appears, and fanfare/buzzer chimes on quiz answers.
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Decision 1: Strict Audio State Gate on Mic Stop & Live Sessions**
-  - *Chosen Approach*: Introduce a session token (`activeSessionId`) and strict state checks (`if (!userWantsListening) return;`) inside `recognition.onresult`, `handleUserMessage`, `handleAudioUtterance`, and `speakCuteCartoonVoice`. Furthermore, when Gemini 3.8 Live (`isConnected`) is active, `speakCuteCartoonVoice` will never invoke `window.speechSynthesis`, allowing Gemini 3.8 Live's native audio stream to be the sole voice.
-  - *Why*: Guarantees that stopping the microphone silences Mochi-Puff immediately with zero trailing sentences from `window.speechSynthesis`, and prevents two voices from speaking simultaneously.
-  - *Alternatives Considered*: Letting `recognition.stop()` finish processing its last buffer—rejected because users expect clicking Mochi-Puff a second time to act as an immediate mute/stop switch.
+- **Decision 1: Procedural Three.js Geometry + Dynamic Canvas Textures vs. External GLTF Assets**
+  - *Chosen Approach*: Build all 5 hologram scientific models and the 3D classroom blackboard procedurally using Three.js primitives, instanced particles, and HTML5 `CanvasTexture` for live chalk text.
+  - *Why*: Guarantees zero network loading delay, instant context-driven spawning within a single animation frame, and dynamic real-time text updates on the 3D blackboard for any question.
+  - *Alternatives Considered*: Loading external `.glb` models, which adds network latency and cannot dynamically render arbitrary chalk text or custom equations.
 
-- **Decision 2: Procedural Multi-Part 3D Props & Web Audio Synthesis**
-  - *Chosen Approach*: Construct the Magic Wand, Butterflies, Selfie Camera, Funny Props, Guitar, Dhol, and Floating Musical Notes as composite `THREE.Group` hierarchies using PBR materials (`MeshStandardMaterial` / `MeshPhysicalMaterial`) and synthesize shutter clicks, magic chimes, guitar chords, and Dhol beats via the Web Audio API.
-  - *Why*: Ensures zero external asset loading delays, zero 404 errors, and 60fps responsiveness synchronized with Mochi-Puff's body deformations.
+- **Decision 2: Seamless Automatic Context Triggering with Dual Voice + Click Answer Support**
+  - *Chosen Approach*: Automatically detect topic categories from the conversation transcript (both in Gemini Live via tool declarations and in the local/REST knowledge engine) to spawn the matching 3D Hologram or 3D Blackboard Viva state machine. During an active Viva question, the user can answer naturally by voice OR click a subtle floating choice bar if their mic is off.
+  - *Why*: Respects the user's preference for automatic context-driven activation while ensuring the quiz remains 100% playable even if the user pauses their microphone.
 
 ---
 
@@ -68,33 +70,40 @@ This plan resolves the unintended offline browser TTS voice firing when turning 
 - **Architecture & Component Diagram**:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        USER INTERACTION LAYER                           │
-│   [ Click on 3D Mochi-Puff ]          [ Bottom Scene Dock Buttons ]     │
-└───────────────┬─────────────────────────────────────────┬───────────────┘
-                │                                         │
-                ▼                                         ▼
-┌───────────────────────────────────────┐ ┌───────────────────────────────┐
-│     VOICE & SESSION CONTROLLER        │ │   3D ACTION & PROP ENGINE     │
-│  • Click Toggle (Connect / Disconnect)│ │  • Magic Wand + Butterflies   │
-│  • Session Token Gate (Stops late TTS)│ │  • Selfie Pose + Funny Props  │
-│  • Gemini 3.8 Live WebSocket Stream   │ │  • Concert (Guitar & Dhol)    │
-│  • Silence Offline TTS when Live/Off  │ │  • Procedural Web Audio SFX   │
-└───────────────┬───────────────────────┘ └───────────────┬───────────────┘
-                │                                         │
-                └───────────────────┬─────────────────────┘
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     THREE.JS SCENE & ANIMATION LOOP                     │
-│  • Composite 3D Prop Groups attached to Mochi-Puff Root & Scene         │
-│  • Spring Kinematics, Levitation Bobbing & Particle Orbits              │
-└─────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    Conversation & Context Router                          │
+│  (Voice Transcript / Gemini Live Tool Calls / Knowledge Engine Matcher)   │
+└───────────────────┬───────────────────────────────────┬───────────────────┘
+                    │                                   │
+     [Complex Science/Tech/Math Topic]       [Quiz / Viva / Challenge Intent]
+                    ▼                                   ▼
+┌───────────────────────────────────────┐ ┌─────────────────────────────────┐
+│     3D Hologram Explainer System      │ │   3D Blackboard Viva Engine     │
+│  • Hologram Emitter Pad & Beam        │ │  • 3D Framed Chalkboard Mesh    │
+│  • Procedural 3D Sub-Models:          │ │  • Dynamic CanvasTexture Chalk  │
+│    - Black Hole + Accretion Ring      │ │  • 3D Pointer Stick & Gold Medal│
+│    - Quantum Atom + Electron Orbits   │ │  • Viva State Machine:          │
+│    - Rotating DNA Double Helix        │ │    IDLE → QUESTION → EVALUATE   │
+│    - Solar System Planetary Orbits    │ │  • Voice + Click Answer Handler │
+│    - Neural Network Synapse Graph     │ └─────────────────┬───────────────┘
+└───────────────────┬───────────────────┘                   │
+                    └───────────────────┬───────────────────┘
+                                        ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                Mochi-Puff 3D Creature & Emotion Engine                    │
+│  • Equips Topper Glasses / Pointer Stick • Triggers 'topper_flex' Swag    │
+│  • Synchronizes High-Pitched Cartoon Voice & WebAudio SFX                 │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 - **Data Model & State**:
-  - `userWantsListening` & `sessionGenerationId`: Incremented on every connect/disconnect toggle so any asynchronous callback from an older session is immediately discarded.
-  - `creature.animState`: Extended with `magicMode` (`wandActive`, `levitationWeight`, `butterfliesVisible`), `selfieMode` (`cameraActive`, `flashIntensity`, `funnyPropType`), and `concertMode` (`instrument`: `'guitar' | 'dhol' | null`, `beatPhase`).
+  - `hologramState`: `{ active: boolean, topicType: 'black_hole' | 'quantum_atom' | 'dna_helix' | 'solar_system' | 'neural_net', timer: number, progress: number }`
+  - `vivaQuizState`: `{ active: boolean, currentQuestion: object, userScore: number, mochiScore: number, roundStatus: 'asking' | 'correct' | 'wrong', timer: number }`
 - **Interactive Component & State Mapping**:
-  - **Mochi-Puff 3D Click Handler**: Toggles `connectLiveAPI()` / `disconnectLiveAPI()`, increments `sessionGenerationId`, cancels `speechSynthesis`, and aborts `SpeechRecognition` (`recognition.abort()`) so no trailing `onresult` event fires.
-  - **Voice Command & Tool Router**: Maps both Gemini 3.8 Live tool calls (`trigger_creature_action`) and instant voice keywords (`magic`, `jadoo`, `butterfly`, `selfie`, `photo`, `guitar`, `dhol`, `concert`) to the new 3D animations and procedural sound effects.
-  - **Bottom Dock Quick-Action Controls**: Adds one-click interactive buttons for **Magic Spell**, **Selfie Pose**, and **Music Concert** so users can also trigger the new 3D showcases directly with a single tap.
+  - **Automatic Topic Detection**: Whenever a user query or Gemini response touches Quantum Physics, Black Holes/Relativity, DNA/Biology, AI/Coding, Space/Astronomy, or Calculus/Math, `showHologram(topicType, duration)` is invoked on the 3D creature controller.
+  - **Viva Quiz Lifecycle**:
+    - Saying *"quiz"*, *"viva"*, *"test lo"*, *"sawal pucho"*, or *"challenge"* transitions `vivaQuizState` to `asking`, lowers the 3D Blackboard into view, renders the chalk question + options on the 3D board texture, and speaks the question in Mochi's topper voice.
+    - The next user utterance (or option click) is evaluated against the active question's answer patterns:
+      - **Match**: Increments `userScore`, updates the 3D chalkboard texture, triggers a spinning 3D Gold Medal animation, and speaks a surprised-yet-cheeky topper praise line.
+      - **Miss**: Increments `mochiScore`, displays the solution on the 3D chalkboard, triggers `topper_flex`, and speaks a witty roast explaining the real concept.
+    - Saying *"stop quiz"* or *"band karo"* smoothly retracts the 3D blackboard back into idle state.
