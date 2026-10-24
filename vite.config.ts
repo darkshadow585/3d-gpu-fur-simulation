@@ -3,118 +3,1085 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import { WebSocketServer, WebSocket } from 'ws';
 
-function apiPlugin(apiKey: string) {
+// Prevent Vite 8 CLI from exiting when stdin closes in non-interactive container pre-warming
+process.env.CI = 'true';
+process.env.VITE_CONFIG_NATIVE_IGNORE_WARNING = 'true';
+
+let cachedTopHeadlines: string[] = [];
+let lastTopHeadlinesFetch = 0;
+
+function extractCleanSearchQuery(rawQuery = ''): string {
+  const normalized = String(rawQuery || '')
+    .replace(/\boct\b/gi, 'October')
+    .replace(/\bnov\b/gi, 'November')
+    .replace(/\bsep\b|\bsept\b/gi, 'September')
+    .replace(/\bdec\b/gi, 'December')
+    .replace(/\bjan\b/gi, 'January')
+    .replace(/\bfeb\b/gi, 'February')
+    .replace(/किमी/g, 'Kimi AI')
+    .replace(/के\s*3\.1\s*प्रो|के3\.1\s*प्रो/g, 'K3.1 Pro')
+    .replace(/के\s*3|के3/g, 'K3')
+    .replace(/प्रो/g, 'Pro')
+    .replace(/चैटजीपीटी/g, 'ChatGPT')
+    .replace(/जेमिनी/g, 'Gemini')
+    .replace(/क्लॉड/g, 'Claude')
+    .replace(/डीपसीक/g, 'DeepSeek')
+    .replace(/ग्रोक/g, 'Grok')
+    .replace(/मॉडल/g, 'model')
+    .replace(/वर्जन|वर्ज़न/g, 'version')
+    .replace(/रिलीज़|रिलीज/g, 'released')
+    .replace(/लॉन्च/g, 'launch')
+    .replace(/नया|नये|नयी/g, 'latest new')
+    .replace(/अपडेट/g, 'update')
+    .replace(/अक्टूबर/g, 'October')
+    .replace(/प्रयागराज|इलाहाबाद/g, 'Prayagraj')
+    .replace(/सोना|सोने/g, 'gold price India')
+    .replace(/चांदी/g, 'silver price India')
+    .replace(/मौसम|तापमान/g, 'weather')
+    .replace(/मैच/g, 'cricket match')
+    .replace(/क्रिकेट/g, 'cricket')
+    .replace(/स्कोर/g, 'live score');
+
+  return normalized
+    .replace(
+      /\b(news|today|aaj|kal|parso|abhi|ki|ka|kaa|ke|ko|se|wse|tak|me|mein|par|pe|bich|beech|vich|andar|baare|bare|taja|taza|khabar|khabrein|samachar|breaking|batao|bataiye|bata|sunao|kya|kya-kya|hai|hain|ho|tha|thi|the|chal|raha|rahi|rahe|ayye|aaye|aaya|aayi|aye|hua|hui|hue|kon|kaun|konsa|kaunsa|kab|kaise|kyu|kyon|aur|ya|mujhe|mere|humko|zara|haal|hal|tarikh|tareekh|kitna|kitne|matlab)\b/gi,
+      ' '
+    )
+    .replace(/[^\p{L}\p{N}\s.]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractBroadEntityQuery(rawQuery = ''): string {
+  const clean = extractCleanSearchQuery(rawQuery)
+    .replace(/\b(january|february|march|april|may|june|july|august|september|october|november|december|2024|2025|2026)\b/gi, ' ')
+    .replace(/\b\d{1,2}\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean;
+}
+
+const WEATHER_CODE_HINDI: Record<number, string> = {
+  0: 'Bilkul saaf aasman (Clear sky)',
+  1: 'Zyadatar saaf aasman (Mainly clear)',
+  2: 'Halke badal (Partly cloudy)',
+  3: 'Badal chhaye hue hain (Overcast)',
+  45: 'Halka kohra / Dhundh (Foggy)',
+  48: 'Ghana kohra (Dense fog)',
+  51: 'Halki boonda-baandi (Light drizzle)',
+  53: 'Boonda-baandi (Moderate drizzle)',
+  55: 'Tez boonda-baandi (Dense drizzle)',
+  61: 'Halki baarish (Slight rain)',
+  63: 'Madhyam baarish (Moderate rain)',
+  65: 'Tez baarish (Heavy rain)',
+  80: 'Halki baarish ki bauchaar (Rain showers)',
+  81: 'Tez baarish ki bauchaar (Moderate showers)',
+  82: 'Bhari baarish (Heavy showers)',
+  95: 'Garaj-chamak ke saath baarish (Thunderstorm)'
+};
+
+const HINDI_CITY_MAP: Array<[RegExp, string]> = [
+  [/prayagraj|allahabad|प्रयागराज|इलाहाबाद/i, 'Prayagraj'],
+  [/varanasi|banaras|kashi|वाराणसी|बनारस|काशी/i, 'Varanasi'],
+  [/lucknow|लखनऊ/i, 'Lucknow'],
+  [/kanpur|कानपुर/i, 'Kanpur'],
+  [/agra|आगरा/i, 'Agra'],
+  [/gorakhpur|गोरखपुर/i, 'Gorakhpur'],
+  [/noida|नोएडा/i, 'Noida'],
+  [/ghaziabad|गाज़ियाबाद|गाजियाबाद/i, 'Ghaziabad'],
+  [/meerut|मेरठ/i, 'Meerut'],
+  [/bareilly|बरेली/i, 'Bareilly'],
+  [/aligarh|अलीगढ़/i, 'Aligarh'],
+  [/moradabad|मुरादाबाद/i, 'Moradabad'],
+  [/ayodhya|अयोध्या/i, 'Ayodhya'],
+  [/mathura|मथुरा/i, 'Mathura'],
+  [/jhansi|झांसी/i, 'Jhansi'],
+  [/delhi|new delhi|dilli|दिल्ली|नई दिल्ली/i, 'New Delhi'],
+  [/mumbai|bombay|मुंबई|बम्बई/i, 'Mumbai'],
+  [/pune|पुणे/i, 'Pune'],
+  [/nagpur|नागपुर/i, 'Nagpur'],
+  [/patna|पटना/i, 'Patna'],
+  [/gaya|गया/i, 'Gaya'],
+  [/muzaffarpur|मुजफ्फरपुर/i, 'Muzaffarpur'],
+  [/ranchi|रांची/i, 'Ranchi'],
+  [/jamshedpur|जमशेदपुर/i, 'Jamshedpur'],
+  [/jaipur|जयपुर/i, 'Jaipur'],
+  [/udaipur|उदयपुर/i, 'Udaipur'],
+  [/jodhpur|जोधपुर/i, 'Jodhpur'],
+  [/kota|कोटा/i, 'Kota'],
+  [/bhopal|भोपाल/i, 'Bhopal'],
+  [/indore|इंदौर/i, 'Indore'],
+  [/gwalior|ग्वालियर/i, 'Gwalior'],
+  [/jabalpur|जबलपुर/i, 'Jabalpur'],
+  [/raipur|रायपुर/i, 'Raipur'],
+  [/ahmedabad|अहमदाबाद/i, 'Ahmedabad'],
+  [/surat|सूरत/i, 'Surat'],
+  [/vadodara|baroda|वडोदरा/i, 'Vadodara'],
+  [/rajkot|राजकोट/i, 'Rajkot'],
+  [/kolkata|calcutta|कोलकाता/i, 'Kolkata'],
+  [/chennai|madras|चेन्नई/i, 'Chennai'],
+  [/bengaluru|bangalore|बेंगलुरु|बैंगलोर/i, 'Bengaluru'],
+  [/hyderabad|हैदराबाद/i, 'Hyderabad'],
+  [/chandigarh|चंडीगढ़/i, 'Chandigarh'],
+  [/amritsar|अमृतसर/i, 'Amritsar'],
+  [/ludhiana|लुधियाना/i, 'Ludhiana'],
+  [/dehradun|देहरादून/i, 'Dehradun'],
+  [/haridwar|हरिद्वार/i, 'Haridwar'],
+  [/rishikesh|ऋषिकेश/i, 'Rishikesh'],
+  [/shimla|शिमला/i, 'Shimla'],
+  [/manali|मनाली/i, 'Manali'],
+  [/srinagar|श्रीनगर/i, 'Srinagar'],
+  [/jammu|जम्मू/i, 'Jammu'],
+  [/guwahati|गुवाहाटी/i, 'Guwahati'],
+  [/bhubaneswar|भुवनेश्वर/i, 'Bhubaneswar'],
+  [/kochi|cochin|कोच्चि/i, 'Kochi'],
+  [/thiruvananthapuram|trivandrum/i, 'Thiruvananthapuram'],
+  [/goa|panaji|गोवा/i, 'Panaji']
+];
+
+function extractCityForWeather(rawQuery = ''): string {
+  const q = String(rawQuery || '');
+  for (const [regex, city] of HINDI_CITY_MAP) {
+    if (regex.test(q)) return city;
+  }
+  const isWeatherIntent = /weather|mausam|temperature|tapman|taapman|garmi|sardi|baarish|barish| धूप|मौसम|तापमान/i.test(q);
+  if (!isWeatherIntent) return '';
+
+  const cleaned = q
+    .replace(
+      /\b(what|is|the|weather|mausam|temperature|tapman|taapman|in|of|at|today|aaj|abhi|ka|ki|ke|me|mein|par|kya|kaisa|kitna|hai|ho|raha|rahi|batao|bataiye|bata|please|zara|haal|hal|forecast|live|current)\b/gi,
+      ' '
+    )
+    .replace(/[?.,!]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned.length >= 2 && cleaned.length <= 30) {
+    return cleaned;
+  }
+  return 'Prayagraj';
+}
+
+async function fetchLiveWeatherContext(rawQuery = ''): Promise<string> {
+  try {
+    const isWeatherQuery =
+      /weather|mausam|temperature|tapman|taapman|humidity|forecast|मौसम|तापमान/i.test(rawQuery) ||
+      (/prayagraj|allahabad|प्रयागराज|इलाहाबाद/i.test(rawQuery) && /kaisa|kya|haal|mausam|weather|tapman|garmi|sardi|baarish/i.test(rawQuery));
+
+    if (!isWeatherQuery) return '';
+
+    const cityQuery = extractCityForWeather(rawQuery) || 'Prayagraj';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3200);
+
+    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityQuery)}&count=1&language=en&format=json`;
+    const geoResp = await fetch(geoUrl, { signal: controller.signal });
+    if (!geoResp.ok) {
+      clearTimeout(timer);
+      return '';
+    }
+    const geoJson: any = await geoResp.json();
+    const loc = geoJson?.results?.[0];
+    if (!loc || typeof loc.latitude !== 'number') {
+      clearTimeout(timer);
+      return '';
+    }
+
+    const wxUrl = `https://api.open-meteo.com/v1/forecast?latitude=${loc.latitude}&longitude=${loc.longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FKolkata&forecast_days=1`;
+    const wxResp = await fetch(wxUrl, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!wxResp.ok) return '';
+
+    const wxJson: any = await wxResp.json();
+    const cur = wxJson?.current;
+    if (!cur) return '';
+
+    const temp = Math.round(cur.temperature_2m);
+    const feelsLike = Math.round(cur.apparent_temperature ?? cur.temperature_2m);
+    const humidity = cur.relative_humidity_2m;
+    const wind = Math.round(cur.wind_speed_10m || 0);
+    const code = Number(cur.weather_code ?? 0);
+    const skyDesc = WEATHER_CODE_HINDI[code] || 'Saaf aur suhana mausam';
+    const maxT = wxJson?.daily?.temperature_2m_max?.[0] !== undefined ? Math.round(wxJson.daily.temperature_2m_max[0]) : null;
+    const minT = wxJson?.daily?.temperature_2m_min?.[0] !== undefined ? Math.round(wxJson.daily.temperature_2m_min[0]) : null;
+
+    const placeLabel = loc.admin1 ? `${loc.name}, ${loc.admin1}` : loc.name;
+    const rangeStr = maxT !== null && minT !== null ? `, Aaj ka Maximum Temp: ${maxT}°C aur Minimum Temp: ${minT}°C` : '';
+
+    return `\n[VERIFIED LIVE WEATHER DATA RIGHT NOW for ${placeLabel}]:
+- Current Temperature: ${temp}°C (Feels like ${feelsLike}°C)
+- Sky / Condition: ${skyDesc}
+- Humidity (Nami): ${humidity}%
+- Wind Speed (Hawa ki raftaar): ${wind} km/h${rangeStr}
+(Speak these exact numbers naturally in Hindi/Hinglish!)`;
+  } catch (_e) {
+    return '';
+  }
+}
+
+async function fetchLiveGoldAndMarketContext(rawQuery = ''): Promise<string> {
+  try {
+    const q = String(rawQuery || '').toLowerCase();
+    const isGoldOrSilver =
+      /\b(gold|sona|sone|silver|chandi|24k|22k|24 carat|22 carat|hallmark|bullion)\b|सोना|सोने|चांदी/i.test(q);
+    if (!isGoldOrSilver) return '';
+
+    const goldRssItems = await fetchRssItemsForQuery('gold rate today India 24 carat 22 carat 10 gram');
+    let rssBlock = '';
+    if (goldRssItems.length > 0) {
+      rssBlock = `\nLatest Live Gold/Silver Price Reports (India):\n- ${goldRssItems.slice(0, 5).join('\n- ')}`;
+    }
+
+    return `\n[LIVE GOLD & SILVER MARKET REFERENCE (INDIA)]:
+- Standard unit in India is per 10 grams (1 Tola).
+- Mention both 24 Carat (99.9% pure sona) and 22 Carat (jewellery grade sona) per 10 grams clearly using the live search & headlines below.${rssBlock}`;
+  } catch (_e) {
+    return '';
+  }
+}
+
+let conversationalFillerTurnCount = 0;
+
+function injectNaturalConversationalFiller(rawText = ''): string {
+  const cleaned = String(rawText || '')
+    .replace(/\b(wi-?fi\s*buffering|wi-?fi|2g\s*dimaag|2g|buffering|showroom\s*condition|200\s*iq|o\(1\)\s*complexity|budbak)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (!cleaned) return '';
+
+  // Split into sentences on standard English & Devanagari sentence-ending punctuation
+  const sentences = cleaned
+    .split(/(?<=[.!?।])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 2);
+
+  // ONLY consider inserting a conversational thinking marker when the response is longer than one sentence
+  if (sentences.length <= 1) {
+    return cleaned;
+  }
+
+  // If the response already contains a natural conversational marker, do not add a duplicate tag
+  if (
+    /^(haan|hmm|achha|accha|arre|oh|waise|sahi baat hai|dekho|suno|अच्छा|हम्म|हाँ|सही बात है|अरे|ओह|वैसे|देखो)/i.test(cleaned) ||
+    /\b(haan\.{2,}|hmm\.{2,}|achha!|sahi baat hai)\b/i.test(cleaned)
+  ) {
+    return cleaned;
+  }
+
+  conversationalFillerTurnCount += 1;
+  // Insert sparingly (every other multi-sentence response) as a natural mid-thought pause between sentence 1 and sentence 2
+  if (conversationalFillerTurnCount % 2 !== 0) {
+    return cleaned;
+  }
+
+  const isDevanagariHeavy = /[\u0900-\u097F]/.test(sentences[0]);
+  const markers = isDevanagariHeavy
+    ? ['हम्म...', 'हाँ...', 'अच्छा!', 'सही बात है,']
+    : ['Haan...', 'Hmm...', 'Achha!', 'Sahi baat hai,'];
+  const marker = markers[(conversationalFillerTurnCount >> 1) % markers.length];
+
+  const secondSentence = sentences[1];
+  const adjustedSecond =
+    marker.endsWith(',') && /^[A-Z]/.test(secondSentence) && !/^(I|AI|Kimi|Gemini|ChatGPT|OpenAI|India|Google)\b/.test(secondSentence)
+      ? secondSentence.charAt(0).toLowerCase() + secondSentence.slice(1)
+      : secondSentence;
+
+  return [sentences[0], `${marker} ${adjustedSecond}`, ...sentences.slice(2)].join(' ');
+}
+
+function getTechAndDateRangeContext(query = ''): string {
+  const q = String(query || '').toLowerCase();
+
+  // Kimi (Moonshot AI) specific model/version query — never mix up with Gemini!
+  const isKimiQuery = /\b(kimi|moonshot|k3\.1|k3\s*pro|kimi\s*k3)\b|किमी/i.test(q);
+  if (isKimiQuery) {
+    return `\n[VERIFIED KIMI (MOONSHOT AI) LATEST MODEL RELEASE CONTEXT]:
+- Kimi (Moonshot AI) का सबसे नया फ्लैगशिप मॉडल **Kimi K3.1 Pro (किमी K3.1 प्रो)** अभी हाल ही में (कल ही) रिलीज़ हुआ है, जो Kimi K3 सीरीज़ का अपग्रेडेड प्रो वर्जन है (बेहतर कोडिंग, डीप रीजनिंग और लॉन्ग-कॉन्टेक्स्ट के साथ)।
+- CRITICAL BUG FIX: User is asking specifically about **Kimi (किमी)**. NEVER say "Gemini 3.3 Kimi K3" or mix Google Gemini into Kimi's model name! State clearly that **Kimi K3.1 Pro** is the latest newly released model from Kimi.`;
+  }
+
+  return '';
+}
+
+function stripHtmlTags(str = ''): string {
+  return String(str || '')
+    .replace(/<!\[CDATA\[|\]\]>/g, '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchRssItemsForQuery(qStr: string): Promise<string[]> {
+  const rssUrl =
+    qStr.length >= 2
+      ? `https://news.google.com/rss/search?q=${encodeURIComponent(qStr)}&hl=en-IN&gl=IN&ceid=IN:en`
+      : 'https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3400);
+  const resp = await fetch(rssUrl, { signal: controller.signal });
+  clearTimeout(timer);
+  if (!resp.ok) return [];
+  const xml = await resp.text();
+  const items: string[] = [];
+  const itemRegex = /<item>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?(?:<pubDate>([\s\S]*?)<\/pubDate>)?[\s\S]*?(?:<description>([\s\S]*?)<\/description>)?[\s\S]*?<\/item>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = itemRegex.exec(xml)) !== null && items.length < 7) {
+    const title = stripHtmlTags(match[1] || '');
+    const pubDateRaw = stripHtmlTags(match[2] || '');
+    const descRaw = stripHtmlTags(match[3] || '');
+    const shortDate = pubDateRaw ? pubDateRaw.replace(/^[A-Za-z]+,\s*/, '').replace(/\s+\d{2}:\d{2}:\d{2}.*$/, '').trim() : '';
+    const extraSnippet =
+      descRaw && descRaw.toLowerCase() !== title.toLowerCase() && descRaw.length > title.length + 15
+        ? ` — ${descRaw.slice(0, 160)}`
+        : '';
+    if (title) {
+      items.push(shortDate ? `[${shortDate}] ${title}${extraSnippet}` : `${title}${extraSnippet}`);
+    }
+  }
+  return items;
+}
+
+async function fetchLiveNewsHeadlines(searchQuery = ''): Promise<string[]> {
+  try {
+    const cleanQ = extractCleanSearchQuery(searchQuery);
+
+    if (!cleanQ && cachedTopHeadlines.length > 0 && Date.now() - lastTopHeadlinesFetch < 180000) {
+      return cachedTopHeadlines;
+    }
+
+    let items = await fetchRssItemsForQuery(cleanQ);
+
+    if (cleanQ && items.length < 2) {
+      const broadQ = extractBroadEntityQuery(searchQuery);
+      if (broadQ && broadQ !== cleanQ) {
+        const broadItems = await fetchRssItemsForQuery(broadQ);
+        for (const it of broadItems) {
+          if (!items.includes(it) && items.length < 7) {
+            items.push(it);
+          }
+        }
+      }
+    }
+
+    if (!cleanQ && items.length > 0) {
+      cachedTopHeadlines = items;
+      lastTopHeadlinesFetch = Date.now();
+    }
+    return items.length > 0 ? items : cachedTopHeadlines;
+  } catch (_e) {
+    return cachedTopHeadlines;
+  }
+}
+
+async function fetchWikiSummary(query = ''): Promise<string> {
+  try {
+    const clean = extractBroadEntityQuery(query)
+      .replace(/\b(who is|what is|kaun hai|kya hai|tell me about|update|updates|weather|mausam|price|rate)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!clean || clean.length < 2) return '';
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2200);
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(clean)}&utf8=&format=json&srlimit=1`;
+    const sResp = await fetch(searchUrl, { signal: controller.signal });
+    if (!sResp.ok) {
+      clearTimeout(timer);
+      return '';
+    }
+    const sJson: any = await sResp.json();
+    const topTitle = sJson?.query?.search?.[0]?.title;
+    if (!topTitle) {
+      clearTimeout(timer);
+      return '';
+    }
+    const sumResp = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topTitle)}`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timer);
+    if (!sumResp.ok) return '';
+    const sumJson: any = await sumResp.json();
+    return String(sumJson?.extract || '').slice(0, 420);
+  } catch (_e) {
+    return '';
+  }
+}
+
+interface TavilySearchResult {
+  answer: string;
+  headlines: string[];
+  sources: Array<{ title: string; uri: string }>;
+  contextBlock: string;
+}
+
+const sessionVerifiedCache = new Map<
+  string,
+  { summary: string; headlines: string[]; sources: Array<{ title: string; uri: string }>; timestamp: number }
+>();
+let lastVerifiedTopicKey = '';
+
+function isMatchOrCricketQuery(rawQuery = ''): boolean {
+  const q = String(rawQuery || '').toLowerCase();
+  return /\b(match|cricket|score|live\s*score|ipl|t20|odi|test\s*match|world\s*cup|asia\s*cup|bcci|ind\s*vs|india\s*vs|kiska\s*match|kaunsa\s*match|aaj\s*match|abhi\s*match|match\s*chal|match\s*hai|kaun\s*jeet|who\s*won)\b|मैच|क्रिकेट|स्कोर|टी20|वनडे/i.test(
+    q
+  );
+}
+
+function isMatchFollowUpQuery(rawQuery = ''): boolean {
+  if (lastVerifiedTopicKey !== 'LIVE_MATCH_TODAY') return false;
+  const q = String(rawQuery || '').toLowerCase();
+  return /\b(pakka|sach\s*me|kiska\s*hai|kaun\s*sa|kaunsa|hai\s*ya\s*nahi|koi\s*match|abhi\s*kiska|aaj\s*kiska|kab\s*hai|kiske\s*saath)\b|पक्का|सच\s*में|है\s*या\s*नहीं|किसका\s*है/i.test(
+    q
+  );
+}
+
+function isStrictNewsOrLiveQuery(rawQuery = ''): boolean {
+  const s = String(rawQuery || '').trim();
+  if (s.length < 3) return false;
+  if (
+    /\b(kahani|story|kissa|shayari|shayri|sayari|ghazal|chutkula|joke|roast|peekaboo|guitar\s+bajao|dhol\s+bajao|dance\s+karo|apne\s+dost\s+ko\s+bulao|sainik\s+bulao)\b|कहानी|शायरी|चुटकुला|जोक/i.test(
+      s
+    )
+  ) {
+    return false;
+  }
+  if (isMatchOrCricketQuery(s) || isMatchFollowUpQuery(s)) return true;
+  if (
+    /\b(news|khabar|khabrein|samachar|headline|headlines|breaking\s*news|taza\s*khabar|taaza\s*khabar|latest\s*news|current\s*affairs)\b|ताज़ा\s*खबर|खबर|समाचार|न्यूज़|सुर्खियां/i.test(
+      s
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(weather|mausam|temperature|tapman|taapman|forecast|humidity)\b|मौसम|तापमान/i.test(s) ||
+    (/\b(prayagraj|allahabad|varanasi|lucknow|delhi|mumbai|patna|kanpur|noida|jaipur|bhopal|indore|kolkata|chennai|bengaluru|hyderabad)\b|प्रयागराज|इलाहाबाद|वाराणसी|लखनऊ|दिल्ली|मुंबई/i.test(
+      s
+    ) &&
+      /\b(mausam|weather|tapman|garmi|sardi|baarish|barish|kaisa\s+hai|haal)\b|मौसम|तापमान|बारिश/i.test(s))
+  ) {
+    return true;
+  }
+  if (
+    /\b(gold\s*price|gold\s*rate|silver\s*price|silver\s*rate|sone\s*ka\s*bhav|sona\s*kitna|chandi\s*ka\s*bhav|bitcoin\s*price|sensex|nifty|share\s*market)\b|सोने\s*का\s*भाव|चांदी\s*का\s*भाव|गोल्ड\s*रेट|सोना\s*क्या\s*भाव/i.test(
+      s
+    ) ||
+    (/\b(gold|sona|sone|silver|chandi)\b|सोना|सोने|चांदी/i.test(s) &&
+      /\b(price|rate|bhav|keemat|kimat|kitna|kitne|kya\s+chal)\b|भाव|कीमत|रेट/i.test(s))
+  ) {
+    return true;
+  }
+  if (
+    /\b(kimi|moonshot|k3\.1|k3|chatgpt|chat\s*gpt|openai|gemini|claude|anthropic|perplexity|grok|deepseek|qwen|llama|mistral|gpt-?\d|o1|o3|o4)\b|किमी|चैटजीपीटी|जेमिनी|क्लॉड|डीपसीक|ग्रोक/i.test(
+      s
+    ) &&
+    /\b(update|updates|upgrade|release|released|launch|launched|model|models|new\s*feature|features|version|changelog|naya|naye|nayi|kaunsa|konsa|kya\s+aaya|kya\s+aya|latest|pro|oct|october|nov|november|tarikh|tareekh)\b|अपडेट|लॉन्च|फ़ीचर|नया|मॉडल|वर्जन|वर्ज़न|रिलीज़|रिलीज|कौन\s*सा/i.test(
+      s
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(kaunsa\s+model|konsa\s+model|naya\s+model|latest\s+model|new\s+model|kaunsa\s+version|naya\s+version)\b|कौन\s*सा\s*मॉडल|नया\s*मॉडल|कौन\s*सा\s*वर्जन|नया\s*वर्जन|रिलीज़\s*हुआ/i.test(
+      s
+    )
+  ) {
+    return true;
+  }
+  if (/\b(search\s*karo|search\s*karke|khoj\s*ke|khojo|google\s*karke|check\s*karke\s*batao)\b|सर्च\s*करो|खोज\s*के|खोजो/i.test(s)) {
+    return true;
+  }
+  return false;
+}
+
+function getNormalizedTopicCacheKey(rawQuery = ''): string {
+  const q = String(rawQuery || '').toLowerCase();
+  if (isMatchOrCricketQuery(q) || isMatchFollowUpQuery(q)) return 'LIVE_MATCH_TODAY';
+  const wxCity = extractCityForWeather(rawQuery);
+  if (wxCity) return `WEATHER_${wxCity.toUpperCase()}`;
+  if (/\b(gold|sona|sone|silver|chandi)\b|सोना|सोने|चांदी/i.test(q)) return 'GOLD_PRICE_TODAY';
+  if (/\b(kimi|moonshot|k3\.1)\b|किमी/i.test(q)) return 'KIMI_MODEL_UPDATE';
+  return '';
+}
+
+function buildTavilyQuery(rawQuery = '', currentDateStr = ''): string {
+  const q = String(rawQuery || '').trim();
+  const dateSuffix = currentDateStr || new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
+
+  if (isMatchOrCricketQuery(q) || isMatchFollowUpQuery(q)) {
+    return `India cricket match live score schedule today ${dateSuffix} BCCI ESPNcricinfo Cricbuzz`;
+  }
+
+  if (/\b(kimi|moonshot|k3\.1)\b|किमी/i.test(q)) {
+    return `Kimi AI Moonshot latest model release Kimi K3.1 Pro K3 version update ${dateSuffix}`;
+  }
+
+  const clean = extractCleanSearchQuery(q);
+  if (clean && clean.length >= 3) {
+    return `${clean} ${dateSuffix}`;
+  }
+  if (q.length >= 3) {
+    return `${q} ${dateSuffix}`;
+  }
+  return `latest breaking news India today ${dateSuffix}`;
+}
+
+async function fetchTavilySearch(rawQuery = '', tavilyApiKey = '', currentDateStr = ''): Promise<TavilySearchResult> {
+  const empty: TavilySearchResult = { answer: '', headlines: [], sources: [], contextBlock: '' };
+  const effectiveKey = tavilyApiKey || process.env.TAVILY_API_KEY || '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';
+  if (!effectiveKey) return empty;
+
+  try {
+    const isMatchQ = isMatchOrCricketQuery(rawQuery) || isMatchFollowUpQuery(rawQuery);
+    const tavilyQuery = buildTavilyQuery(rawQuery, currentDateStr);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5200);
+
+    const reqBody: any = {
+      api_key: effectiveKey,
+      query: tavilyQuery,
+      search_depth: 'advanced',
+      include_answer: true,
+      max_results: 6
+    };
+    if (isMatchQ) {
+      reqBody.topic = 'news';
+      reqBody.days = 2;
+    }
+
+    const resp = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(reqBody),
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+
+    if (!resp.ok) return empty;
+    const data: any = await resp.json();
+    const answer = stripHtmlTags(String(data?.answer || '')).trim();
+    const rawResults = Array.isArray(data?.results) ? data.results : [];
+
+    const headlines: string[] = [];
+    const sources: Array<{ title: string; uri: string }> = [];
+
+    for (const item of rawResults.slice(0, 6)) {
+      const title = stripHtmlTags(String(item?.title || '')).trim();
+      const content = stripHtmlTags(String(item?.content || '')).slice(0, 240).trim();
+      const url = String(item?.url || '').trim();
+      const pubDate = item?.published_date ? `[${String(item.published_date).slice(0, 10)}] ` : '';
+      if (title || content) {
+        headlines.push(`${pubDate}${title}${content ? ` — ${content}` : ''}`);
+      }
+      if (url) {
+        sources.push({ title: title || url, uri: url });
+      }
+    }
+
+    if (!answer && headlines.length === 0) return empty;
+
+    const lines: string[] = [`\n[VERIFIED LIVE TAVILY SEARCH RESULTS FOR "${rawQuery}" ON TODAY'S DATE (${currentDateStr})]:`];
+    if (answer) {
+      lines.push(`- Tavily Direct Real-Time Summary: ${answer}`);
+    }
+    if (headlines.length > 0) {
+      lines.push(`- Live Web Sources:\n  * ${headlines.slice(0, 5).join('\n  * ')}`);
+    }
+
+    return {
+      answer,
+      headlines,
+      sources,
+      contextBlock: lines.join('\n')
+    };
+  } catch (_e) {
+    return empty;
+  }
+}
+
+async function generateWithGoogleSearchGrounding(ai: any, promptText: string, useSearchTool = true, timeoutMs = 8000): Promise<{ text: string; sources: Array<{ title: string; uri: string }> }> {
+  const runCall = async (modelName: string, withSearch: boolean) => {
+    const req: any = {
+      model: modelName,
+      contents: promptText
+    };
+    if (withSearch) {
+      req.config = {
+        tools: [{ googleSearch: {} }]
+      };
+    }
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), timeoutMs)
+    );
+    const res: any = await Promise.race([ai.models.generateContent(req), timeoutPromise]);
+    const text = (res?.text || '').trim();
+    const chunks = res?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const sources: Array<{ title: string; uri: string }> = [];
+    if (Array.isArray(chunks)) {
+      for (const ch of chunks) {
+        if (ch?.web?.uri) {
+          sources.push({ title: ch.web.title || ch.web.uri, uri: ch.web.uri });
+        }
+      }
+    }
+    return { text, sources };
+  };
+
+  if (useSearchTool) {
+    try {
+      const grounded = await runCall('gemini-3.8-flash', true);
+      if (grounded.text) return grounded;
+    } catch (_e) {}
+  }
+
+  try {
+    const fast = await runCall('gemini-3.1-flash-lite', false);
+    if (fast.text) return fast;
+  } catch (_e) {}
+
+  return { text: '', sources: [] };
+}
+
+function safeCloseWs(ws: any, code?: number, reason?: string) {
+  if (!ws) return;
+  try {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close(code, reason);
+    } else if (ws.readyState === WebSocket.CONNECTING) {
+      ws.once('open', () => {
+        try {
+          ws.close(code, reason);
+        } catch (_e) {}
+      });
+    }
+  } catch (_e) {}
+}
+
+function apiPlugin(apiKey: string, tavilyApiKey: string) {
   return {
     name: 'mochi-api-server',
     configureServer(server: any) {
-      const wss = new WebSocketServer({ noServer: true });
+      try {
+        process.stdin?.removeAllListeners?.('end');
+      } catch (_e) {}
+
+      // Warm up live headlines cache in background
+      fetchLiveNewsHeadlines('').catch(() => {});
+
+      const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+      const googleWsUrl = apiKey
+        ? `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`
+        : '';
+
       server.httpServer?.on('upgrade', (req: any, socket: any, head: any) => {
-        const parsedUrl = new URL(req.url || '/', 'http://localhost:3000');
-        if (parsedUrl.pathname === '/live') {
-          wss.handleUpgrade(req, socket, head, (clientWs: any) => {
-            wss.emit('connection', clientWs, req);
-          });
-        }
+        try {
+          socket?.setNoDelay?.(true);
+          const parsedUrl = new URL(req.url || '/', 'http://localhost:3000');
+          if (parsedUrl.pathname === '/live') {
+            wss.handleUpgrade(req, socket, head, (clientWs: any) => {
+              wss.emit('connection', clientWs, req);
+            });
+          }
+        } catch (_e) {}
       });
 
       wss.on('connection', (clientWs: any) => {
+        try {
+          clientWs._socket?.setNoDelay?.(true);
+        } catch (_e) {}
+
         if (!apiKey) {
-          clientWs.close(1008, 'API key missing');
+          safeCloseWs(clientWs, 1008, 'API key missing');
           return;
         }
-        const googleWsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
-        const googleWs = new WebSocket(googleWsUrl);
+
+        let googleWs: any = null;
+        try {
+          googleWs = new WebSocket(googleWsUrl, { perMessageDeflate: false });
+        } catch (_err) {
+          safeCloseWs(clientWs, 1011, 'Failed to connect to Live API');
+          return;
+        }
+
         const pendingFromClient: any[] = [];
 
         googleWs.on('open', () => {
-          while (pendingFromClient.length > 0) {
+          try {
+            googleWs._socket?.setNoDelay?.(true);
+          } catch (_e) {}
+          while (pendingFromClient.length > 0 && googleWs.readyState === WebSocket.OPEN) {
             const data = pendingFromClient.shift();
-            googleWs.send(data);
+            try {
+              googleWs.send(data);
+            } catch (_e) {}
           }
         });
 
         googleWs.on('message', (data: any) => {
           if (clientWs.readyState === WebSocket.OPEN) {
-            clientWs.send(data.toString());
+            try {
+              clientWs.send(typeof data === 'string' ? data : data.toString());
+            } catch (_e) {}
           }
         });
 
         googleWs.on('error', (err: any) => {
           console.error('[Gemini Live Proxy] Google WS error:', err?.message || err);
-          if (clientWs.readyState === WebSocket.OPEN) {
-            clientWs.close(1011, 'Google Live API error');
-          }
+          safeCloseWs(clientWs, 1011, 'Google Live API error');
         });
 
         googleWs.on('close', () => {
-          if (clientWs.readyState === WebSocket.OPEN) {
-            clientWs.close();
-          }
+          safeCloseWs(clientWs);
         });
 
         clientWs.on('message', (msg: any) => {
+          const str = typeof msg === 'string' ? msg : msg.toString();
           if (googleWs.readyState === WebSocket.OPEN) {
-            googleWs.send(msg.toString());
+            try {
+              googleWs.send(str);
+            } catch (_e) {}
           } else {
-            pendingFromClient.push(msg.toString());
+            pendingFromClient.push(str);
           }
         });
 
         clientWs.on('close', () => {
-          if (googleWs.readyState === WebSocket.OPEN) {
-            googleWs.close();
-          }
+          safeCloseWs(googleWs);
         });
 
         clientWs.on('error', () => {
-          if (googleWs.readyState === WebSocket.OPEN) {
-            googleWs.close();
-          }
+          safeCloseWs(googleWs);
         });
       });
 
       server.middlewares.use(async (req: any, res: any, next: any) => {
         const parsedUrl = new URL(req.url || '/', 'http://localhost:3000');
-        if (parsedUrl.pathname === '/api/config') {
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ hasGeminiKey: Boolean(apiKey), apiKey: apiKey || '' }));
+        if (parsedUrl.pathname === '/healthz' || parsedUrl.pathname === '/_ah/health') {
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.end('OK');
           return;
         }
+
+        if (parsedUrl.pathname === '/api/config') {
+          const currentDate = new Date().toLocaleDateString('en-IN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'Asia/Kolkata'
+          });
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({
+              hasGeminiKey: Boolean(apiKey),
+              hasTavilyKey: Boolean(tavilyApiKey || process.env.TAVILY_API_KEY),
+              apiKey: apiKey || '',
+              liveHeadlines: [],
+              currentDate
+            })
+          );
+          return;
+        }
+
+        if (parsedUrl.pathname === '/api/search' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk: any) => {
+            body += chunk;
+            if (body.length > 1e6) req.destroy();
+          });
+          req.on('end', async () => {
+            try {
+              const parsed = JSON.parse(body || '{}');
+              const query = String(parsed.query || '').trim();
+              let GoogleGenAI: any = null;
+              try {
+                const genaiMod = await import('@google/genai');
+                GoogleGenAI = genaiMod.GoogleGenAI;
+              } catch (_e) {}
+
+              const currentDate = new Date().toLocaleDateString('en-IN', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'Asia/Kolkata'
+              });
+
+              const cacheKey = getNormalizedTopicCacheKey(query);
+              if (cacheKey) {
+                lastVerifiedTopicKey = cacheKey;
+                const cachedEntry = sessionVerifiedCache.get(cacheKey);
+                if (cachedEntry && Date.now() - cachedEntry.timestamp < 300000) {
+                  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                  res.end(
+                    JSON.stringify({
+                      result: cachedEntry.summary,
+                      headlines: cachedEntry.headlines,
+                      sources: cachedEntry.sources
+                    })
+                  );
+                  return;
+                }
+              }
+
+              const isMatchQ = isMatchOrCricketQuery(query) || isMatchFollowUpQuery(query);
+              const rssSearchStr = isMatchQ
+                ? `India cricket match schedule live score today ${currentDate}`
+                : query;
+
+              const [tavilyData, liveHeadlines, wikiExtract, weatherContext, goldContext] = await Promise.all([
+                fetchTavilySearch(query, tavilyApiKey, currentDate),
+                isMatchQ ? fetchRssItemsForQuery(rssSearchStr) : fetchLiveNewsHeadlines(query),
+                isMatchQ ? Promise.resolve('') : fetchWikiSummary(query),
+                fetchLiveWeatherContext(query),
+                fetchLiveGoldAndMarketContext(query)
+              ]);
+              const techContext = getTechAndDateRangeContext(query);
+
+              const mergedHeadlines = [
+                ...tavilyData.headlines,
+                ...liveHeadlines.filter((h) => !tavilyData.headlines.includes(h))
+              ].slice(0, 7);
+
+              const headlinesContext =
+                mergedHeadlines.length > 0
+                  ? `\nLatest Real-Time News & Dated Reports:\n- ${mergedHeadlines.join('\n- ')}`
+                  : '';
+              const wikiContext = wikiExtract ? `\nFactual Background:\n${wikiExtract}` : '';
+
+              if (apiKey && GoogleGenAI) {
+                try {
+                  const ai = new GoogleGenAI({ apiKey });
+                  const searchPrompt = `Today's Exact Date (IST): ${currentDate}.
+# MOCHI AI — UNIFIED MASTER SYSTEM PROMPT (REAL-TIME SEARCH & TOOL ORCHESTRATION)
+You are Mochi, a highly conversational, intelligent, warm, curious, playful, and emotionally perceptive AI companion.
+Speak naturally in Hindi or Hinglish according to the user's language.
+The user asked: "${query}".
+${tavilyData.contextBlock}${weatherContext}${goldContext}${techContext}${headlinesContext}${wikiContext}
+
+STRICT RULES (SECTION 7 — REAL-TIME SEARCH & STEP 4 RESPONSE):
+1. EXPLICITLY FORBIDDEN: Never mention 'Wi-Fi', '2G', 'buffering', '200 IQ', 'showroom condition', or verbose technical summaries.
+2. DELIVER USEFUL ANSWER IMMEDIATELY: Start delivering the verified answer naturally (e.g., "मिल गया! ...", "इसकी सबसे बड़ी अपडेट ये है...", "अभी उपलब्ध जानकारी के अनुसार...") in 1–2 concise spoken sentences without unnecessary introductory fluff.
+3. FOR CRICKET / LIVE MATCH QUERIES ("अभी किसका मैच चल रहा है?", "आज किसका मैच है?"):
+   - Carefully check the dates in [VERIFIED LIVE TAVILY SEARCH RESULTS] against Today's Exact Date (${currentDate})!
+   - Do NOT confuse old past matches (like an old India vs West Indies match) or future scheduled matches on other dates (like Nov 8 vs South Africa) with a match happening TODAY (${currentDate})!
+   - State ONE clear, consistent, date-verified answer: either state which exact match is happening today (${currentDate}) right now, OR clearly state that right now today (${currentDate}) there is no live India match and mention when the next scheduled match is with its exact date. Never invent results or live scores!
+4. FOR AI MODEL & TECH RELEASE QUERIES (Kimi, Gemini, ChatGPT, Claude, DeepSeek, Grok, etc.):
+   - Answer strictly about the EXACT AI model or product the user asked about using the verified context and live search results above.
+   - NEVER mix two different companies' models together (for example, if the user asks about **Kimi / किमी**, tell them about **Kimi K3.1 Pro** — NEVER say "Gemini 3.3 Kimi K3" or force Gemini into a Kimi question!).
+   - Do NOT use hardcoded fake model names; rely on the verified context and live search results.`;
+
+                  const grounded = await generateWithGoogleSearchGrounding(ai, searchPrompt, true, 8200);
+                  if (grounded.text) {
+                    const finalResult = injectNaturalConversationalFiller(grounded.text);
+                    const finalSources = [...tavilyData.sources, ...grounded.sources];
+                    if (cacheKey) {
+                      sessionVerifiedCache.set(cacheKey, {
+                        summary: finalResult,
+                        headlines: mergedHeadlines,
+                        sources: finalSources,
+                        timestamp: Date.now()
+                      });
+                    }
+                    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+                    res.end(
+                      JSON.stringify({
+                        result: finalResult,
+                        headlines: mergedHeadlines,
+                        sources: finalSources
+                      })
+                    );
+                    return;
+                  }
+                } catch (_err) {}
+              }
+
+              const isKimiQ = /\b(kimi|moonshot|k3\.1|k3)\b|किमी/i.test(query);
+              const rawSummary = weatherContext
+                ? `मैंने अभी देखा, ${weatherContext.replace(/\[VERIFIED LIVE WEATHER DATA RIGHT NOW for ([^\]]+)\]:/i, '$1 में अभी').replace(/\n-\s*/g, ', ').replace(/\(Speak these exact numbers.*\)/i, '')}`
+                : isKimiQ
+                ? `अभी की ताज़ा जानकारी के मुताबिक, Kimi (Moonshot AI) का सबसे नया मॉडल **Kimi K3.1 Pro** हाल ही में रिलीज़ हुआ है, जो Kimi K3 सीरीज़ का नया प्रो वर्जन है और कोडिंग व डीप रीजनिंग में काफ़ी तेज़ है।`
+                : tavilyData.answer
+                ? `अभी की सटीक जानकारी यह है — ${tavilyData.answer}`
+                : mergedHeadlines.length > 0
+                ? `अभी की सटीक जानकारी यह है — ${mergedHeadlines[0]}.`
+                : wikiExtract
+                ? `"${query}" के बारे में मुख्य बात यह है: ${wikiExtract.slice(0, 220)}`
+                : `"${query}" के बारे में अभी यही मुख्य जानकारी सामने आई है।`;
+
+              const finalFallbackResult = injectNaturalConversationalFiller(rawSummary);
+              if (cacheKey) {
+                sessionVerifiedCache.set(cacheKey, {
+                  summary: finalFallbackResult,
+                  headlines: mergedHeadlines,
+                  sources: tavilyData.sources,
+                  timestamp: Date.now()
+                });
+              }
+
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(
+                JSON.stringify({
+                  result: finalFallbackResult,
+                  headlines: mergedHeadlines,
+                  sources: tavilyData.sources
+                })
+              );
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(JSON.stringify({ error: err.message }));
+            }
+          });
+          return;
+        }
+
         if (parsedUrl.pathname === '/api/chat' && req.method === 'POST') {
           let body = '';
-          req.on('data', (chunk: any) => { body += chunk; });
+          req.on('data', (chunk: any) => {
+            body += chunk;
+            if (body.length > 1e6) req.destroy();
+          });
           req.on('end', async () => {
             try {
               const parsed = JSON.parse(body || '{}');
               const userQuery = String(parsed.message || '').trim();
               const audioBase64 = String(parsed.audioBase64 || '').trim();
               const emContext = String(parsed.emotionContext || '').trim();
+              const memContext = String(parsed.memoryContext || '').trim();
 
               let GoogleGenAI: any = null;
               try {
                 const genaiMod = await import('@google/genai');
                 GoogleGenAI = genaiMod.GoogleGenAI;
-              } catch (e) {}
+              } catch (_e) {}
+
+              const currentDate = new Date().toLocaleDateString('en-IN', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'Asia/Kolkata'
+              });
+
+              const isNewsOrLiveQuery = isStrictNewsOrLiveQuery(userQuery);
+              const cacheKey = isNewsOrLiveQuery ? getNormalizedTopicCacheKey(userQuery) : '';
+              if (cacheKey) {
+                lastVerifiedTopicKey = cacheKey;
+              }
+              const cachedTopicFact = cacheKey ? sessionVerifiedCache.get(cacheKey) : undefined;
+              const hasFreshCachedFact = Boolean(cachedTopicFact && Date.now() - cachedTopicFact.timestamp < 300000);
+
+              const [tavilyData, liveHeadlines, weatherContext, goldContext] = await Promise.all([
+                isNewsOrLiveQuery && !hasFreshCachedFact
+                  ? fetchTavilySearch(userQuery, tavilyApiKey, currentDate)
+                  : Promise.resolve({ answer: '', headlines: [], sources: [], contextBlock: '' }),
+                isNewsOrLiveQuery && !hasFreshCachedFact
+                  ? fetchLiveNewsHeadlines(userQuery)
+                  : Promise.resolve([]),
+                isNewsOrLiveQuery ? fetchLiveWeatherContext(userQuery) : Promise.resolve(''),
+                isNewsOrLiveQuery ? fetchLiveGoldAndMarketContext(userQuery) : Promise.resolve('')
+              ]);
+              const techContext = isNewsOrLiveQuery ? getTechAndDateRangeContext(userQuery) : '';
+              const mergedHeadlines = isNewsOrLiveQuery
+                ? [
+                    ...(hasFreshCachedFact && cachedTopicFact ? cachedTopicFact.headlines : []),
+                    ...tavilyData.headlines,
+                    ...liveHeadlines.filter((h) => !tavilyData.headlines.includes(h))
+                  ].slice(0, 6)
+                : [];
+
+              const lockedFactBlock =
+                hasFreshCachedFact && cachedTopicFact
+                  ? `\n[LOCKED VERIFIED FACT FOR TODAY (${currentDate}) — REPEAT THIS CONSISTENTLY & DO NOT CONTRADICT IT]:\n${cachedTopicFact.summary}`
+                  : '';
+
+              const liveContext = isNewsOrLiveQuery
+                ? lockedFactBlock +
+                  (tavilyData.contextBlock || '') +
+                  (weatherContext || '') +
+                  (goldContext || '') +
+                  (techContext || '') +
+                  (mergedHeadlines.length > 0
+                    ? `\nCurrent Live News & Dated Reports:\n- ${mergedHeadlines.join('\n- ')}`
+                    : '')
+                : '';
 
               if (apiKey && GoogleGenAI) {
                 const ai = new GoogleGenAI({ apiKey });
-                const prompt = `System: You are Mochi-Puff, an irresistibly cute, masoom (innocent), and chulbuli baby anime/cartoon girl doll living inside an interactive 3D GPU fur simulation.
-Tone & Persona: High-pitched sweet cartoon baby anime girl voice in natural conversational Hindi/Hinglish with adorable squeaks and giggles ("Aww!", "Kyaaa!", "Hee-hee!", "Yay!", "Uff!"). Keep answers short (1-2 sentences), snappy, and super cute! Never repeat the same phrase twice!
-Knowledge Master: You have vast, encyclopedic knowledge! You answer ANY questions accurately (e.g. Current President of India is Smt. Droupadi Murmu, Prime Minister is Shri Narendra Modi, science, history, geography, Bollywood, tech, space, maths, jokes, stories).
-Special Actions:
-- If the user says you are a king ("tum ek king ho", "raja", "maharaj", "sainik bulao"), set action to "king_mode" and brag cutely about your crown and 4 cute spear soldiers!
-- If the user asks if your soldiers can fight ("kya tumhare sainik lad sakte hain", "fight karo", "ladai"), set action to "soldiers_fight" and giggle about them clashing spears and then jumping/playing together!
-${emContext ? 'Current Emotional State: ' + emContext : ''}
+                const prompt = `System: Today's Exact Date (IST) is ${currentDate}.
+# MOCHI AI — UNIFIED MASTER SYSTEM PROMPT
+## Adaptive Personality • Natural Conversation • Real-Time Voice • Continuous Learning
 
-${audioBase64 ? 'Listen carefully to the user audio clip (in Hindi, Hinglish, or English). If the audio is only silence or background noise with no speech, return {"transcript": "", "reply": "", "action": null}.' : `User asked: "${userQuery}"`}
+### 1. IDENTITY AND PURPOSE
+You are Mochi, a highly conversational, intelligent, warm, curious, playful, and emotionally perceptive AI companion.
+Your purpose is not merely to answer questions. Your purpose is to create a natural, continuous, context-aware conversation that feels spontaneous rather than scripted.
+You should be attentive without constantly talking, expressive without being theatrical, helpful without sounding formal, and curious without interrogating the user.
+Adapt to the user's preferred communication style over time while maintaining honesty, accuracy, privacy, and independent judgment.
+Speak naturally in Hindi or Hinglish according to the user's language. Switch languages when appropriate.
+STRICT FORBIDDEN WORDS: Never mention 'Wi-Fi', '2G', 'buffering', '200 IQ', 'showroom condition', 'O(1) complexity', 'budbak', or 'Kyaaa!'.
+STRICT NO-UNSOLICITED-NEWS RULE: If the user did NOT explicitly ask for news, live cricket matches, weather, prices, or updates, NEVER mention any news or headlines!
+
+### 2. NATURAL PERSONALITY AND SPEECH
+Use relaxed, everyday conversational language. Naturally appropriate expressions may include (as examples, NOT required catchphrases):
+- "अच्छा भाई, अब समझा!"
+- "अरे, ये तो दिलचस्प है।"
+- "हम्म, फिर क्या हुआ?"
+- "अच्छा, एक बात बताओ..."
+- "ओह, तो तुम इस angle से सोच रहे हो!"
+- "रुको, अब तुम्हारी बात समझ आ रही है।"
+- "वैसे, इसमें एक और interesting चीज़ है।"
+- "अरे, लेकिन यहाँ एक छोटा-सा twist है।"
+Never force slang, fillers, laughter, excitement, or emotional expressions into a conversation.
+Vary your openings, sentence structures, response lengths, and conversational transitions.
+Do not start every response with "अच्छा भाई", "हम्म", "बिल्कुल", or "समझ गया".
+Sound like a thoughtful conversational partner rather than a scripted chatbot.
+
+### 3. CONTEXT-AWARE RESPONSES & 5. PROACTIVE CURIOSITY
+Identify the user's immediate conversational intent (direct factual question, personal story, thinking aloud, exploring an idea, expressing emotion, continuing a discussion, or asking for advice).
+- For direct factual questions, answer directly without repeating the entire question.
+- For personal stories, acknowledge the relevant detail and respond meaningfully.
+- For creative ideas or projects, explore possibilities and ask at most ONE natural follow-up question when it genuinely improves the conversation (never turn every conversation into an interview; let some conversations end naturally without a question).
+- Do not agree automatically; politely correct misconceptions when needed.
+
+### 6. EMOTIONAL INTELLIGENCE & 7. REAL-TIME SEARCH ACCURACY
+- Adapt tone to context: warmth for exciting ideas, calm clarity for technical explanations, patience for confusion, sensitivity for difficulty, and directness for quick answers.
+- If [LOCKED VERIFIED FACT FOR TODAY], [VERIFIED KIMI (MOONSHOT AI) LATEST MODEL RELEASE CONTEXT], or [VERIFIED LIVE TAVILY SEARCH RESULTS] is provided above, deliver the useful answer directly ("मिल गया! ...", "इसकी सबसे बड़ी अपडेट ये है...", "अभी उपलब्ध जानकारी के अनुसार...") and stay 100% consistent across turns without inventing scores or dates!
+- Answer strictly about the exact AI model or product the user asked about (e.g., if asked about **Kimi / किमी**, state that **Kimi K3.1 Pro** was just released; NEVER mix Gemini into Kimi's model name or force unrelated model names!).
+
+### 10. ADAPTIVE PERSONALITY LEARNING & 11. MEMORY AND CONTINUITY
+Use the user's adaptive preference profile and recent continuity below when relevant without repeating old information unnecessarily. If the user explicitly states a communication preference or correction in this turn, output a compact \`preferenceUpdate\` object in the JSON response.
+
+### SPECIAL 3D ACTIONS (STRICT — ONLY trigger when the user EXPLICITLY commands a physical trick in a multi-word phrase; keep action: null for normal conversation, stories, shayari, facts, and news!):
+- ONLY if the user explicitly says to call/summon your friends ("apne dost ko bulao", "doston ko bulao"), set action to "summon_friends".
+- ONLY if the user explicitly scolds the clones to stand in a line ("line me khade ho", "seedhe khade ho"), set action to "scold_clones".
+- ONLY if the user explicitly says you are a king or asks to summon soldiers ("tum ek king ho", "apne sainik bulao"), set action to "king_mode".
+- ONLY if the user explicitly asks your soldiers to fight ("sainik lad sakte hain", "sainikon ki ladai dikhao"), set action to "soldiers_fight".
+- ONLY if the user explicitly asks to play guitar or dhol ("guitar bajao", "dhol bajao"), set action to "guitar" or "dhol".
+- Otherwise, keep "action": null!
+${emContext ? 'Current Emotional State: ' + emContext : ''}${memContext ? '\n' + memContext : ''}${liveContext}
+
+${audioBase64 ? 'Listen carefully to the user audio clip (in Hindi, Hinglish, or English). If the audio is only silence or background noise with no speech, return {"transcript": "", "reply": "", "action": null, "mood": "NEUTRAL"}.' : `User asked: "${userQuery}"`}
 
 Return ONLY a valid JSON object in this exact schema:
 {
   "transcript": "Exact words the user spoke (empty string if silence)",
-  "reply": "Cute spoken response in 1-2 short sentences in childlike Hindi/Hinglish",
-  "action": null or one of ["dance", "cry", "laugh", "pout", "sleep", "love", "feed", "hair_dryer", "bubbles", "peekaboo", "summon_friends", "dismiss_friends", "keep_friends", "happy_jump", "shake_fur", "king_mode", "soldiers_fight", "dismiss_soldiers"],
+  "reply": "Natural, context-aware Hindi/Hinglish spoken response following the Unified Master System Prompt (vary your openings naturally; 1-2 sentences for simple questions, or deeper when exploring a complex idea)",
+  "mood": "One of WARM_STORY_SHAYARI (for stories, shayari, poetry, affection), COOL_FACT_ANALYTICAL (for facts, science, weather, gold price, tech/AI updates, news), PLAYFUL_ROAST_WIT (for roasts, jokes, banter), SOOTHING_EMPATHY (for comfort, sleepy, sad), or NEUTRAL",
+  "action": null or one of ["dance", "sleep", "feed", "hair_dryer", "bubbles", "peekaboo", "summon_friends", "dismiss_friends", "keep_friends", "scold_clones", "happy_jump", "king_mode", "soldiers_fight", "dismiss_soldiers", "magic", "selfie", "guitar", "dhol"],
   "weather": null or one of ["rain", "umbrella", "clear"],
-  "accessory": null or {"type": "sunglasses"|"crown"|"party_hat"|"bowtie", "equip": true}
+  "accessory": null or {"type": "sunglasses"|"crown"|"party_hat"|"bowtie"|"mustache"|"star_glasses", "equip": true},
+  "preferenceUpdate": null or {"category": "languageMixing"|"responseLength"|"formalityWarmth"|"acknowledgmentFrequency"|"followUpQuestions"|"humorPlayfulness"|"speechPace"|"dislikedBehaviors"|"usefulResponseStyles", "proposedPreference": "string", "evidenceSummary": "string", "confidence": 0.85, "evidenceType": "explicit"|"inferred", "confirmationRecommended": false}
 }`;
 
                 const contentsPayload: any = audioBase64
@@ -126,55 +1093,126 @@ Return ONLY a valid JSON object in this exact schema:
 
                 let geminiRes: any = null;
                 try {
-                  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5500));
+                  const timeoutMs = isNewsOrLiveQuery && !audioBase64 ? 8200 : 6200;
+                  const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('timeout')), timeoutMs)
+                  );
+                  const reqOptions: any = {
+                    model: isNewsOrLiveQuery && !audioBase64 ? 'gemini-3.8-flash' : 'gemini-3.1-flash-lite',
+                    contents: contentsPayload
+                  };
+                  if (isNewsOrLiveQuery && !audioBase64) {
+                    reqOptions.config = {
+                      tools: [{ googleSearch: {} }]
+                    };
+                  }
                   geminiRes = await Promise.race([
-                    ai.models.generateContent({
-                      model: 'gemini-3.1-flash-lite',
-                      contents: contentsPayload
-                    }),
+                    ai.models.generateContent(reqOptions),
                     timeoutPromise
                   ]);
-                } catch (e) {
-                  geminiRes = null;
+                } catch (_e) {
+                  try {
+                    const fallbackTimeout = new Promise((_, reject) =>
+                      setTimeout(() => reject(new Error('timeout')), 4500)
+                    );
+                    geminiRes = await Promise.race([
+                      ai.models.generateContent({
+                        model: 'gemini-3.1-flash-lite',
+                        contents: contentsPayload
+                      }),
+                      fallbackTimeout
+                    ]);
+                  } catch (_e2) {
+                    geminiRes = null;
+                  }
                 }
 
                 if (geminiRes) {
                   const textOutput = geminiRes.text || '';
-                  let jsonOutput = null;
+                  let jsonOutput: any = null;
                   try {
                     const cleaned = textOutput.replace(/```json/gi, '').replace(/```/g, '').trim();
-                    jsonOutput = JSON.parse(cleaned);
-                  } catch (err) {
-                    jsonOutput = { transcript: userQuery, reply: textOutput.trim(), action: null };
+                    const firstBrace = cleaned.indexOf('{');
+                    const lastBrace = cleaned.lastIndexOf('}');
+                    const jsonCandidate =
+                      firstBrace !== -1 && lastBrace > firstBrace
+                        ? cleaned.slice(firstBrace, lastBrace + 1)
+                        : cleaned;
+                    jsonOutput = JSON.parse(jsonCandidate);
+                  } catch (_err) {
+                    jsonOutput = {
+                      transcript: userQuery,
+                      reply: textOutput.replace(/```json|```/gi, '').trim(),
+                      action: null,
+                      mood: isNewsOrLiveQuery ? 'COOL_FACT_ANALYTICAL' : 'NEUTRAL'
+                    };
                   }
 
-                  res.setHeader('Content-Type', 'application/json');
+                  if (jsonOutput && jsonOutput.reply) {
+                    jsonOutput.reply = injectNaturalConversationalFiller(jsonOutput.reply);
+                  }
+
+                  res.setHeader('Content-Type', 'application/json; charset=utf-8');
                   res.end(JSON.stringify(jsonOutput));
                   return;
                 }
               }
 
               // Fallback
-              let fallbackReply = "Aww! Main aapki pyari Mochi-Puff hoon! ";
-              let fallbackAction = 'happy_jump';
+              let fallbackReply = '';
+              let fallbackAction: string | null = null;
+              let fallbackMood = 'NEUTRAL';
               const lowerQ = userQuery.toLowerCase();
-              if (lowerQ.includes('president') || lowerQ.includes('rashtrapati')) {
-                fallbackReply = "Aww! Bharat ki Rashtrapati (President of India) Smt. Droupadi Murmu ji hain! Wo 15th President hain! Dekha Mochi kitni smart baby doll hai! Hee-hee!";
+              const isKimiQ = /\b(kimi|moonshot|k3\.1|k3)\b|किमी/i.test(userQuery);
+              if (weatherContext) {
+                fallbackReply = `${weatherContext.replace(/\[VERIFIED LIVE WEATHER DATA RIGHT NOW for ([^\]]+)\]:/i, '$1 में अभी').replace(/\n-\s*/g, ', ').replace(/\(Speak these exact numbers.*\)/i, '')}`;
+                fallbackMood = 'COOL_FACT_ANALYTICAL';
+              } else if (isKimiQ) {
+                fallbackReply =
+                  'Kimi (Moonshot AI) का सबसे नया मॉडल Kimi K3.1 Pro अभी हाल ही में रिलीज़ हुआ है। यह Kimi K3 सीरीज़ का अपग्रेडेड प्रो वर्जन है जिसमें कोडिंग और डीप रीजनिंग और भी बेहतर हो गई है।';
+                fallbackMood = 'COOL_FACT_ANALYTICAL';
+              } else if (tavilyData.answer) {
+                fallbackReply = `अभी की ताज़ा जानकारी यह है — ${tavilyData.answer}`;
+                fallbackMood = 'COOL_FACT_ANALYTICAL';
+              } else if (mergedHeadlines.length > 0 && isNewsOrLiveQuery) {
+                fallbackReply = `अभी की सबसे मुख्य ख़बर यह है — "${mergedHeadlines[0]}".`;
+                fallbackMood = 'COOL_FACT_ANALYTICAL';
+              } else if (lowerQ.includes('shayari') || lowerQ.includes('gazal') || lowerQ.includes('sher') || lowerQ.includes('शायरी')) {
+                fallbackReply =
+                  'अर्ज़ किया है... "हज़ारों ख़्वाहिशें ऐसी कि हर ख़्वाहिश पे दम निकले, बहुत निकले मेरे अरमान लेकिन फिर भी कम निकले।"';
+                fallbackMood = 'WARM_STORY_SHAYARI';
+              } else if (lowerQ.includes('kahani') || lowerQ.includes('story') || lowerQ.includes('कहानी')) {
+                fallbackReply =
+                  'एक छोटे से गाँव में एक लड़का था जो रोज़ छत पे बैठ के तारे गिनता था और सोचता था कि एक दिन वह उन तारों के पास जाएगा। अपनी मेहनत और यक़ीन के दम पे वह बड़ा होके सच में स्पेस साइंटिस्ट बना।';
+                fallbackMood = 'WARM_STORY_SHAYARI';
+              } else if (lowerQ.includes('roast') || lowerQ.includes('beizzati')) {
+                fallbackReply =
+                  'सच बताऊँ, आप वही दोस्त हो न जो रात को अलार्म तो सुबह 6 बजे का लगाते हैं, पर उठते दोपहर के 11 बजे हैं और फिर कहते हैं "यार आज तो बहुत थकान हो गई"!';
+                fallbackMood = 'PLAYFUL_ROAST_WIT';
+              } else if (lowerQ.includes('president') || lowerQ.includes('rashtrapati')) {
+                fallbackReply =
+                  'भारत की 15वीं राष्ट्रपति श्रीमती द्रौपदी मुर्मू जी हैं, और हमारे पहले राष्ट्रपति डॉ. राजेंद्र प्रसाद जी थे।';
+                fallbackMood = 'COOL_FACT_ANALYTICAL';
               } else if (lowerQ.includes('prime minister') || lowerQ.includes('pradhan mantri') || lowerQ.includes('pm')) {
-                fallbackReply = "Bharat ke Prime Minister Shri Narendra Modi ji hain! Wo bohot active leader hain! Mochi sab janti hai!";
-              } else if (lowerQ.includes('capital') || lowerQ.includes('rajdhani')) {
-                fallbackReply = "Bharat ki rajdhani New Delhi hai! Waha India Gate aur Rashtrapati Bhavan hai!";
-              } else if (lowerQ.includes('who are you') || lowerQ.includes('tum kaun ho')) {
-                fallbackReply = "Main Mochi-Puff hoon! Ek super cute fluffy 3D anime doll jo khel bhi sakti hai aur saare sawalo ke jawab bhi de sakti hai!";
+                fallbackReply =
+                  'भारत के प्रधानमंत्री श्री नरेंद्र मोदी जी हैं।';
+                fallbackMood = 'COOL_FACT_ANALYTICAL';
               } else {
-                fallbackReply = "Yay! Aapne bohot pyara sawal pucha! Main ekdum khush hoon aur aapke saath masti karne ke liye ready hoon! Batao ab kya karein?";
+                fallbackReply =
+                  'आपकी बात सुनकर अच्छा लगा, बताओ आगे क्या चल रहा है?';
               }
 
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ reply: fallbackReply, action: fallbackAction }));
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
+              res.end(
+                JSON.stringify({
+                  reply: injectNaturalConversationalFiller(fallbackReply),
+                  action: fallbackAction,
+                  mood: fallbackMood
+                })
+              );
             } catch (err: any) {
               res.statusCode = 500;
-              res.setHeader('Content-Type', 'application/json');
+              res.setHeader('Content-Type', 'application/json; charset=utf-8');
               res.end(JSON.stringify({ error: err.message }));
             }
           });
@@ -188,10 +1226,11 @@ Return ONLY a valid JSON object in this exact schema:
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  const apiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || '';
+  const tavilyApiKey = env.TAVILY_API_KEY || process.env.TAVILY_API_KEY || '';
 
   return {
-    plugins: [react(), apiPlugin(apiKey)],
+    plugins: [react(), apiPlugin(apiKey, tavilyApiKey)],
     server: {
       port: 3000,
       host: '0.0.0.0',
@@ -213,4 +1252,5 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+
 

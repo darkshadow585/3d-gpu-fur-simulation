@@ -2947,36 +2947,17 @@ export function createBlobCreature(options = {}) {
 
   // =========================================================================
   // CONTEXT-TRIGGERED 3D HOLOGRAM EXPLAINER & 3D BLACKBOARD VIVA API
-  // =========================================================================
-  function showHologram(topicType = 'black_hole', title = 'QUANTUM TOPPER', formula = 'E = mc²', duration = 14.0) {
-    const t = String(topicType || 'black_hole').toLowerCase().trim();
-    animState.hologramActive = true;
-    animState.hologramType = t;
-    animState.hologramTimer = duration;
-    hologramContainer.visible = true;
-
-    blackHoleModel.visible = (t === 'black_hole');
-    quantumAtomModel.visible = (t === 'quantum_atom');
-    dnaHelixModel.visible = (t === 'dna_helix');
-    solarSystemModel.visible = (t === 'solar_system');
-    neuralNetModel.visible = (t === 'neural_net' || (!blackHoleModel.visible && !quantumAtomModel.visible && !dnaHelixModel.visible && !solarSystemModel.visible));
-
-    renderHoloLabel(title, formula);
-
-    // Equip cool topper glasses when projecting a 3D hologram!
-    animState.accessories.sunglasses = true;
-    glassesGroup.visible = true;
-    animState.boopImpulse = 0.65;
-    emotionEngine.feedStimulus('topper_swag', 1.35);
-    if (canPlaySfx(80)) {
-      playHologramProjectSound();
-    }
-    return true;
+  function showHologram() {
+    animState.hologramActive = false;
+    animState.hologramTimer = 0.0;
+    hologramContainer.visible = false;
+    return false;
   }
 
   function hideHologram() {
     animState.hologramActive = false;
     animState.hologramTimer = 0.0;
+    hologramContainer.visible = false;
   }
 
   function updateBlackboardViva(vivaData = {}) {

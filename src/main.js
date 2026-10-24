@@ -110,9 +110,6 @@ if (creature.bubblesContainer) {
 if (creature.butterfliesContainer) {
   scene.add(creature.butterfliesContainer);
 }
-if (creature.hologramContainer) {
-  scene.add(creature.hologramContainer);
-}
 if (creature.blackboardContainer) {
   scene.add(creature.blackboardContainer);
 }
@@ -792,6 +789,14 @@ const webglInertiaDisp = new THREE.Vector3(0, 0, 0);
 const webglInertiaVel = new THREE.Vector3(0, 0, 0);
 const webglForceTmp = new THREE.Vector3(0, 0, 0);
 
+// Pre-allocated scratch colors for state-managed Mood System (Zero GC)
+const moodBaseScratch = new THREE.Color();
+const moodTipScratch = new THREE.Color();
+const moodKeyScratch = new THREE.Color();
+const moodRimScratch = new THREE.Color();
+const moodHemiScratch = new THREE.Color();
+const targetMoodColorScratch = new THREE.Color();
+
 function animate() {
   requestAnimationFrame(animate);
 
@@ -997,8 +1002,90 @@ function animate() {
     u.uClumping.value = Math.min(1.0, (simState.clumping || 0.52) + wetness * 0.35);
   }
 
+  // --------------------------------------------------------------------------
+  // State-Managed Mood System: Subtly shift fur colors & scene lighting
+  // based on the emotional tone of the AI's response (warm for stories/shayari,
+  // cool for facts/tech updates, vibrant for roasts, soothing for empathy)
+  // --------------------------------------------------------------------------
+  const moodVis = creature?.emotionEngine?.getMoodVisuals ? creature.emotionEngine.getMoodVisuals() : null;
+  if (moodVis) {
+    moodBaseScratch.set(simState.baseColor || '#5e2bff');
+    if (moodVis.furBlend > 0.001) {
+      targetMoodColorScratch.setRGB(moodVis.baseR, moodVis.baseG, moodVis.baseB);
+      moodBaseScratch.lerp(targetMoodColorScratch, moodVis.furBlend);
+    }
+    if (u.uBaseColor?.value) {
+      u.uBaseColor.value.copy(moodBaseScratch);
+    }
+    if (creature.skinMaterial?.color) {
+      creature.skinMaterial.color.copy(moodBaseScratch).multiplyScalar(0.55);
+    }
+
+    moodTipScratch.set(simState.tipColor || '#ff9ec7');
+    if (moodVis.furBlend > 0.001) {
+      targetMoodColorScratch.setRGB(moodVis.tipR, moodVis.tipG, moodVis.tipB);
+      moodTipScratch.lerp(targetMoodColorScratch, moodVis.furBlend);
+    }
+    if (u.uTipColor?.value) {
+      u.uTipColor.value.copy(moodTipScratch);
+    }
+
+    const arLightLock = simState.environment === 'ar' && envManager.isLightEstimationEnabled();
+    if (!arLightLock) {
+      const effectiveAngleDeg = (simState.lightAngle ?? 42) + (moodVis.lightAngleOffset || 0);
+      const rad = (effectiveAngleDeg * Math.PI) / 180.0;
+      const lx = Math.sin(rad) * 2.8;
+      const ly = 2.1;
+      const lz = Math.cos(rad) * 2.8;
+      keyLight.position.set(lx, ly, lz);
+
+      moodKeyScratch.set(simState.keyColor || '#fff7ed');
+      if (moodVis.lightBlend > 0.001) {
+        targetMoodColorScratch.setRGB(moodVis.keyR, moodVis.keyG, moodVis.keyB);
+        moodKeyScratch.lerp(targetMoodColorScratch, moodVis.lightBlend);
+      }
+      keyLight.color.copy(moodKeyScratch);
+      const scaledLightInt = (simState.lightIntensity ?? 1.85) * (moodVis.lightIntensityScale || 1.0);
+      keyLight.intensity = scaledLightInt * 1.35;
+
+      moodRimScratch.set('#c4b5fd');
+      if (moodVis.lightBlend > 0.001) {
+        targetMoodColorScratch.setRGB(moodVis.rimR, moodVis.rimG, moodVis.rimB);
+        moodRimScratch.lerp(targetMoodColorScratch, moodVis.lightBlend);
+      }
+      rimLight.color.copy(moodRimScratch);
+      const scaledRimInt = (simState.rimIntensity ?? 1.15) * (moodVis.rimIntensityScale || 1.0);
+      rimLight.intensity = scaledRimInt * 1.15;
+
+      moodHemiScratch.set(0xffffff);
+      if (moodVis.lightBlend > 0.001) {
+        targetMoodColorScratch.setRGB(moodVis.hemiR, moodVis.hemiG, moodVis.hemiB);
+        moodHemiScratch.lerp(targetMoodColorScratch, moodVis.lightBlend * 0.65);
+      }
+      hemiLight.color.copy(moodHemiScratch);
+
+      if (u.uKeyLightDir?.value) {
+        u.uKeyLightDir.value.set(lx, ly, lz).normalize();
+      }
+      if (u.uKeyLightColor?.value) {
+        u.uKeyLightColor.value.copy(keyLight.color);
+      }
+      if (u.uKeyLightIntensity) {
+        u.uKeyLightIntensity.value = scaledLightInt;
+      }
+      if (u.uRimLightColor?.value) {
+        u.uRimLightColor.value.copy(rimLight.color);
+      }
+      if (u.uRimIntensity) {
+        u.uRimIntensity.value = scaledRimInt;
+      }
+    }
+  }
+
   renderer.render(scene, camera);
 }
 
 animate();
+
+
 

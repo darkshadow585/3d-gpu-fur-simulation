@@ -1,0 +1,6 @@
+{
+  "summary":  "Implementation plan to eliminate unsolicited news blurting, add ChatGPT-style spoken search acknowledgments (\"Haan, main khoj rahi hoon...\"), enable warm active backchanneling (\"Haan\", \"Hmm\", \"Achha\", \"Theek hai\", light laugh) during user pauses, and enforce single-source date-verified live cricket match and news accuracy via Tavily.",
+  "updatedAt":  "2026-10-24T09:08:51.065020126Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "description": "Interactive 3D WebGL2/GPGPU fur physics and Marschner hair shading simulation for a stylized creature across studio, nature, and live AR camera environments.",
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "dev": "CI=true VITE_CONFIG_NATIVE_IGNORE_WARNING=true vite --port 3000 --host 0.0.0.0",
+    "build": "VITE_CONFIG_NATIVE_IGNORE_WARNING=true vite build",
     "lint": "tsc --noEmit",
     "start": "node server.js",
     "test": "node adversarial_assessor.js"
